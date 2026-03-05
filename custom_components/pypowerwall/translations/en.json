@@ -6,7 +6,8 @@
         "description": "Enter the host and port of your running pypowerwall proxy server.",
         "data": {
           "host": "Host",
-          "port": "Port"
+          "port": "Port",
+          "scan_interval": "Polling interval (seconds)"
         }
       }
     },
@@ -15,6 +16,16 @@
     },
     "abort": {
       "already_configured": "This pypowerwall proxy is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "PyPowerwall Options",
+        "data": {
+          "scan_interval": "Polling interval (seconds)"
+        }
+      }
     }
   },
   "entity": {
@@ -28,6 +39,7 @@
       "time_remaining": {"name": "Time Remaining"},
       "grid_voltage": {"name": "Grid Voltage"},
       "grid_frequency": {"name": "Grid Frequency"},
+      "alert_count": {"name": "Alert Count"},
       "operation_mode": {"name": "Operation Mode"},
       "pypowerwall_version": {"name": "PyPowerwall Version"},
       "firmware_version": {"name": "Firmware Version"}
@@ -35,7 +47,9 @@
     "binary_sensor": {
       "grid_connected": {"name": "Grid Connected"},
       "grid_fault": {"name": "Grid Fault"},
-      "proxy_degraded": {"name": "Proxy Degraded"}
+      "proxy_degraded": {"name": "Proxy Degraded"},
+      "connected_to_tesla": {"name": "Connected to Tesla"},
+      "alerts_active": {"name": "Alerts Active"}
     }
   }
 }

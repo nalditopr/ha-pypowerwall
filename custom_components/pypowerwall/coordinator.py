@@ -9,7 +9,7 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, SCAN_INTERVAL
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,15 +17,21 @@ _LOGGER = logging.getLogger(__name__)
 class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that polls the pypowerwall proxy."""
 
-    def __init__(self, hass: HomeAssistant, host: str, port: int) -> None:
+    def __init__(
+        self, hass: HomeAssistant, host: str, port: int, scan_interval: int = DEFAULT_SCAN_INTERVAL
+    ) -> None:
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=SCAN_INTERVAL),
+            update_interval=timedelta(seconds=scan_interval),
         )
         self._base_url = f"http://{host}:{port}"
-        _LOGGER.debug("PyPowerwallCoordinator initialised, base_url=%s", self._base_url)
+        _LOGGER.debug(
+            "PyPowerwallCoordinator initialised, base_url=%s, interval=%ss",
+            self._base_url,
+            scan_interval,
+        )
 
     async def _async_update_data(self) -> dict[str, Any]:
         _LOGGER.debug("Starting data refresh from %s", self._base_url)
@@ -39,6 +45,7 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 version_info = await self._get(session, "/version")
                 operation = await self._get(session, "/api/operation")
                 system_status = await self._get(session, "/api/system_status")
+                sitemaster = await self._get(session, "/api/sitemaster")
         except UpdateFailed:
             raise
         except Exception as err:
@@ -53,6 +60,7 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "version_info": version_info,
             "operation": operation,
             "system_status": system_status,
+            "sitemaster": sitemaster,
         }
 
     async def _get(self, session: aiohttp.ClientSession, path: str) -> Any:
