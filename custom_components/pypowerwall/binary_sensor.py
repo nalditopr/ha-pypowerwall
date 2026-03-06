@@ -14,7 +14,29 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import PyPowerwallCoordinator
 from .data import PyPowerwallConfigEntry
-from .entity import PyPowerwallEntity
+from .entity import (
+    PyPowerwallEntity,
+    build_block_by_serial,
+    build_device_labels,
+    parse_pod_data,
+    parse_vitals_key,
+)
+
+
+# ---------------------------------------------------------------------------
+#  Pod health flag definitions
+# ---------------------------------------------------------------------------
+POD_HEALTH_FLAGS: tuple[tuple[str, str, BinarySensorDeviceClass | None, bool], ...] = (
+    ("pod_permanently_faulted", "POD_PermanentlyFaulted", BinarySensorDeviceClass.PROBLEM, True),
+    ("pod_persistently_faulted", "POD_PersistentlyFaulted", BinarySensorDeviceClass.PROBLEM, True),
+    ("pod_active_heating", "POD_ActiveHeating", None, False),
+    ("pod_charge_complete", "POD_ChargeComplete", None, False),
+    ("pod_charge_request", "POD_ChargeRequest", None, False),
+    ("pod_discharge_complete", "POD_DischargeComplete", None, False),
+    ("pod_backup_ready", "backup_ready", None, False),
+    ("pod_wobble_detected", "wobble_detected", BinarySensorDeviceClass.PROBLEM, False),
+    ("pod_charge_power_clamped", "charge_power_clamped", BinarySensorDeviceClass.PROBLEM, False),
+)
 
 
 async def async_setup_entry(
@@ -32,27 +54,76 @@ async def async_setup_entry(
         PyPowerwallAlertsActive(coordinator, entry_id),
     ]
 
-    # Per-pod alert binary sensors
     vitals = coordinator.data.get("vitals") or {}
-    battery_blocks = coordinator.data.get("system_status", {}).get("battery_blocks") or []
-    block_by_serial: dict[str, dict] = {}
-    for block in battery_blocks:
-        s = block.get("PackageSerialNumber")
-        if s:
-            block_by_serial[s] = block
+    block_by_serial = build_block_by_serial(coordinator.data)
+    device_labels = build_device_labels(block_by_serial)
 
+    # --- Per-pod alert and health binary sensors ---
     for vkey, vdata in vitals.items():
         if not vkey.startswith("TEPOD"):
             continue
-        parts = vkey.split("--")
-        serial = parts[-1] if len(parts) >= 3 else vkey
-        part_number = parts[1] if len(parts) >= 2 else ""
-        block = block_by_serial.get(serial, {})
-        block_type = block.get("Type", "")
-        label = "Expansion" if block_type == "BatteryExpansion" else "Primary"
+        part_number, serial = parse_vitals_key(vkey)
+        label = device_labels.get(serial, "Primary")
         entities.append(
-            PyPowerwallPodAlerts(coordinator, entry_id, vkey, serial, part_number, label)
+            PyPowerwallPodAlerts(
+                coordinator, entry_id, vkey, serial, part_number, label
+            )
         )
+        # Pod health flags (from /pod)
+        for trans_key, flag_field, dev_class, enabled in POD_HEALTH_FLAGS:
+            entities.append(
+                PyPowerwallPodHealthFlag(
+                    coordinator,
+                    entry_id,
+                    serial,
+                    part_number,
+                    label,
+                    flag_field,
+                    trans_key,
+                    dev_class,
+                    enabled,
+                )
+            )
+
+    # --- Island grid connected (TESYNC) ---
+    for vkey, vdata in vitals.items():
+        if not vkey.startswith("TESYNC"):
+            continue
+        part_number, serial = parse_vitals_key(vkey)
+        entities.append(
+            PyPowerwallIslandGridConnected(
+                coordinator, entry_id, vkey, serial, part_number
+            )
+        )
+
+    # --- PV string connected binary sensors (multi-PVAC) ---
+    pvac_entries: list[tuple[str, str, str]] = []  # (vkey, part, serial)
+    pvs_by_serial: dict[str, str] = {}  # serial → vkey
+
+    for vkey in vitals:
+        if vkey.startswith("PVAC"):
+            part, serial = parse_vitals_key(vkey)
+            pvac_entries.append((vkey, part, serial))
+        elif vkey.startswith("PVS"):
+            _, pvs_serial = parse_vitals_key(vkey)
+            pvs_by_serial[pvs_serial] = vkey
+
+    for pvac_vkey, pvac_part, pvac_serial in pvac_entries:
+        label = device_labels.get(pvac_serial, "Primary")
+        pvs_key = pvs_by_serial.get(pvac_serial)
+        if pvs_key:
+            for string_id in ("A", "B", "C", "D", "E", "F"):
+                entities.append(
+                    PyPowerwallStringConnected(
+                        coordinator,
+                        entry_id,
+                        pvs_key,
+                        pvac_serial,
+                        pvac_part,
+                        string_id,
+                        label=label,
+                    )
+                )
 
     async_add_entities(entities)
 
@@ -95,7 +166,11 @@ class PyPowerwallGridFault(PyPowerwallEntity, BinarySensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         try:
-            return {"faults": self.coordinator.data["system_status"].get("grid_faults", [])}
+            return {
+                "faults": self.coordinator.data["system_status"].get(
+                    "grid_faults", []
+                )
+            }
         except (KeyError, TypeError):
             return {}
 
@@ -201,8 +276,8 @@ class PyPowerwallAlertsActive(PyPowerwallEntity, BinarySensorEntity):
 class PyPowerwallPodAlerts(PyPowerwallEntity, BinarySensorEntity):
     """True when a specific battery pod reports alerts."""
 
+    _attr_translation_key = "pod_alerts"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    _attr_name = "Alerts"
 
     def __init__(
         self,
@@ -228,7 +303,9 @@ class PyPowerwallPodAlerts(PyPowerwallEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool | None:
         try:
-            alerts = self.coordinator.data["vitals"][self._vitals_key].get("alerts", [])
+            alerts = self.coordinator.data["vitals"][self._vitals_key].get(
+                "alerts", []
+            )
             return len(alerts) > 0
         except (KeyError, TypeError):
             return None
@@ -236,6 +313,147 @@ class PyPowerwallPodAlerts(PyPowerwallEntity, BinarySensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         try:
-            return {"alerts": self.coordinator.data["vitals"][self._vitals_key].get("alerts", [])}
+            return {
+                "alerts": self.coordinator.data["vitals"][self._vitals_key].get(
+                    "alerts", []
+                )
+            }
         except (KeyError, TypeError):
             return {}
+
+
+# ---------------------------------------------------------------------------
+#  Pod health flag binary sensor (from /pod data)
+# ---------------------------------------------------------------------------
+class PyPowerwallPodHealthFlag(PyPowerwallEntity, BinarySensorEntity):
+    """Binary sensor for a pod health flag from the /pod endpoint."""
+
+    def __init__(
+        self,
+        coordinator: PyPowerwallCoordinator,
+        entry_id: str,
+        serial: str,
+        part_number: str,
+        device_label: str,
+        flag_key: str,
+        translation_key: str,
+        device_class: BinarySensorDeviceClass | None,
+        enabled_default: bool,
+    ) -> None:
+        super().__init__(coordinator, entry_id)
+        self._serial = serial
+        self._flag_key = flag_key
+        self._attr_unique_id = f"{entry_id}_{serial}_pod_health_{translation_key}"
+        self._attr_translation_key = translation_key
+        if device_class:
+            self._attr_device_class = device_class
+        self._attr_entity_registry_enabled_default = enabled_default
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, serial)},
+            name=f"Powerwall {serial[-4:]} ({device_label})",
+            manufacturer="Tesla",
+            model=part_number,
+            serial_number=serial,
+            via_device=(DOMAIN, entry_id),
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        try:
+            pod_by_serial = parse_pod_data(self.coordinator.data.get("pod"))
+            pw_data = pod_by_serial.get(self._serial, {})
+            val = pw_data.get(self._flag_key)
+            if val is None:
+                return None
+            return bool(val)
+        except (KeyError, TypeError):
+            return None
+
+
+# ---------------------------------------------------------------------------
+#  Island grid connected binary sensor (TESYNC)
+# ---------------------------------------------------------------------------
+class PyPowerwallIslandGridConnected(PyPowerwallEntity, BinarySensorEntity):
+    """True when ISLAND_GridConnected contains 'Connected'."""
+
+    _attr_translation_key = "island_grid_connected"
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+
+    def __init__(
+        self,
+        coordinator: PyPowerwallCoordinator,
+        entry_id: str,
+        vitals_key: str,
+        serial: str,
+        part_number: str,
+    ) -> None:
+        super().__init__(coordinator, entry_id)
+        self._vitals_key = vitals_key
+        self._attr_unique_id = f"{entry_id}_{serial}_island_grid_connected"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, serial)},
+            name="Sync Controller",
+            manufacturer="Tesla",
+            model=part_number or None,
+            via_device=(DOMAIN, entry_id),
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        try:
+            val = self.coordinator.data["vitals"][self._vitals_key].get(
+                "ISLAND_GridConnected"
+            )
+            if val is None:
+                return None
+            return "Connected" in str(val)
+        except (KeyError, TypeError):
+            return None
+
+
+# ---------------------------------------------------------------------------
+#  PV string connected binary sensor (PVS)
+# ---------------------------------------------------------------------------
+class PyPowerwallStringConnected(PyPowerwallEntity, BinarySensorEntity):
+    """PV string connected status from PVS device."""
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: PyPowerwallCoordinator,
+        entry_id: str,
+        pvs_key: str,
+        pvac_serial: str,
+        pvac_part: str,
+        string_id: str,
+        label: str = "Primary",
+    ) -> None:
+        super().__init__(coordinator, entry_id)
+        self._pvs_key = pvs_key
+        self._string_id = string_id
+        self._attr_unique_id = (
+            f"{entry_id}_{pvac_serial}_string_{string_id}_connected"
+        )
+        self._attr_name = f"String {string_id} Connected"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, pvac_serial)},
+            name=f"Powerwall {pvac_serial[-4:]} ({label})",
+            manufacturer="Tesla",
+            model=pvac_part,
+            serial_number=pvac_serial,
+            via_device=(DOMAIN, entry_id),
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        try:
+            pvs_data = self.coordinator.data["vitals"][self._pvs_key]
+            val = pvs_data.get(f"PVS_String{self._string_id}_Connected")
+            if val is None:
+                return None
+            return bool(val)
+        except (KeyError, TypeError):
+            return None

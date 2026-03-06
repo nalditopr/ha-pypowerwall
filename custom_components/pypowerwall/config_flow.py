@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFl
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
 
-from .const import CONF_SCAN_INTERVAL, DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import CONF_CONTROL_SECRET, CONF_SCAN_INTERVAL, DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): vol.All(
             vol.Coerce(int), vol.Range(min=5, max=300)
         ),
+        vol.Optional(CONF_CONTROL_SECRET): str,
     }
 )
 
@@ -90,16 +91,22 @@ class PyPowerwallOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
-        current = self._config_entry.data.get(
-            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+        current_interval = self._config_entry.options.get(
+            CONF_SCAN_INTERVAL,
+            self._config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+        )
+        current_secret = self._config_entry.options.get(
+            CONF_CONTROL_SECRET,
+            self._config_entry.data.get(CONF_CONTROL_SECRET, ""),
         )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(CONF_SCAN_INTERVAL, default=current): vol.All(
+                    vol.Optional(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
                         vol.Coerce(int), vol.Range(min=5, max=300)
                     ),
+                    vol.Optional(CONF_CONTROL_SECRET, default=current_secret): str,
                 }
             ),
         )
