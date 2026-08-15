@@ -235,6 +235,33 @@
       },
       "gateway_uptime": {
         "name": "Gateway iniciado"
+      },
+      "battery_target_power": {
+        "name": "Potencia objetivo de batería"
+      },
+      "max_charge_power": {
+        "name": "Potencia máx. de carga"
+      },
+      "max_discharge_power": {
+        "name": "Potencia máx. de descarga"
+      },
+      "instantaneous_max_charge_power": {
+        "name": "Potencia máx. de carga instantánea"
+      },
+      "instantaneous_max_discharge_power": {
+        "name": "Potencia máx. de descarga instantánea"
+      },
+      "inverter_nominal_usable_power": {
+        "name": "Potencia nominal utilizable del inversor"
+      },
+      "solar_real_power_limit": {
+        "name": "Límite de potencia solar real"
+      },
+      "proxy_uptime": {
+        "name": "Proxy iniciado"
+      },
+      "proxy_data_age": {
+        "name": "Antigüedad de datos del proxy"
       }
     },
     "binary_sensor": {
@@ -285,6 +312,12 @@
       },
       "island_grid_connected": {
         "name": "Red Isla Conectada"
+      },
+      "proxy_fallback": {
+        "name": "Proxy en modo de respaldo"
+      },
+      "transport": {
+        "name": "Transporte {transport}"
       }
     },
     "number": {

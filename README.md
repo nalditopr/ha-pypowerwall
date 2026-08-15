@@ -6,6 +6,8 @@
 
 [![hacs][hacsbadge]][hacs]
 
+<img src="brand/icon.png" alt="PyPowerwall icon" width="96" align="right">
+
 Home Assistant custom integration for Tesla Powerwall via [pypowerwall][pypowerwall] proxy.
 
 [![Add Integration to Home Assistant](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=pypowerwall)

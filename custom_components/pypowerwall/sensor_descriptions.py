@@ -115,7 +115,11 @@ def _parse_ts(value):
     """Parse an ISO timestamp from the proxy into an aware datetime (or None)."""
     if not value:
         return None
-    return dt_util.parse_datetime(str(value))
+    dt = dt_util.parse_datetime(str(value))
+    if dt is None:
+        return None
+    # The proxy's own timestamps (health.startup_time) are naive local time.
+    return dt if dt.tzinfo else dt_util.as_utc(dt.replace(tzinfo=dt_util.get_default_time_zone()))
 
 
 # Energy sensors are only created when the proxy actually reports the counter
@@ -446,6 +450,112 @@ MAIN_SENSORS: tuple[PyPowerwallSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         value_fn=lambda d: _parse_ts((d.get("gateway_status") or {}).get("start_time")),
+    ),
+    # Battery power envelope (system_status). Several of these are null on
+    # v1r/older firmwares, so they are disabled by default; enable if populated.
+    PyPowerwallSensorDescription(
+        key="battery_target_power",
+        translation_key="battery_target_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        icon="mdi:battery-sync",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: (d.get("system_status") or {}).get("battery_target_power"),
+    ),
+    PyPowerwallSensorDescription(
+        key="max_charge_power",
+        translation_key="max_charge_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        icon="mdi:battery-arrow-up-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: (d.get("system_status") or {}).get("max_charge_power"),
+    ),
+    PyPowerwallSensorDescription(
+        key="max_discharge_power",
+        translation_key="max_discharge_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        icon="mdi:battery-arrow-down-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: (d.get("system_status") or {}).get("max_discharge_power"),
+    ),
+    PyPowerwallSensorDescription(
+        key="instantaneous_max_charge_power",
+        translation_key="instantaneous_max_charge_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        icon="mdi:battery-arrow-up",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: (d.get("system_status") or {}).get("instantaneous_max_charge_power"),
+    ),
+    PyPowerwallSensorDescription(
+        key="instantaneous_max_discharge_power",
+        translation_key="instantaneous_max_discharge_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        icon="mdi:battery-arrow-down",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: (d.get("system_status") or {}).get("instantaneous_max_discharge_power"),
+    ),
+    PyPowerwallSensorDescription(
+        key="inverter_nominal_usable_power",
+        translation_key="inverter_nominal_usable_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        icon="mdi:sine-wave",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: (d.get("system_status") or {}).get("inverter_nominal_usable_power"),
+    ),
+    PyPowerwallSensorDescription(
+        key="solar_real_power_limit",
+        translation_key="solar_real_power_limit",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        icon="mdi:solar-power-variant-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: (d.get("system_status") or {}).get("solar_real_power_limit"),
+    ),
+    # Proxy health
+    PyPowerwallSensorDescription(
+        key="proxy_uptime",
+        translation_key="proxy_uptime",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:server-network",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _parse_ts((d.get("health") or {}).get("startup_time")),
+    ),
+    PyPowerwallSensorDescription(
+        key="proxy_data_age",
+        translation_key="proxy_data_age",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:timer-sand",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: ((d.get("health") or {}).get("connection_health") or {}).get("last_success_age_seconds"),
     ),
 )
 
