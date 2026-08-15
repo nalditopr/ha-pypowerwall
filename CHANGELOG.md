@@ -3,7 +3,7 @@
 All notable changes to this integration are documented here.
 Versions follow the `version` field in `custom_components/pypowerwall/manifest.json`.
 
-## Unreleased
+## 0.4.1 — 2026-08-15
 
 ### Fixed
 - Battery Capacity Health could read >200 % while a proxy transport (e.g. `wifi_tedapi`) was
