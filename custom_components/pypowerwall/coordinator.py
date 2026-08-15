@@ -49,6 +49,13 @@ DICT_DEFAULT_KEYS = frozenset(
     {"json", "aggregates", "vitals", "health", "version_info", "system_status", "sitemaster"}
 )
 
+# Endpoints whose content changes rarely: polled every SLOW_POLL_EVERY refreshes,
+# the previous value is reused in between. Cuts ~1/3 of the requests per cycle.
+SLOW_POLL_KEYS = frozenset(
+    {"version_info", "gateway_status", "stats", "sitemaster", "troubleshooting", "meters_solar"}
+)
+SLOW_POLL_EVERY = 10
+
 
 class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that polls the pypowerwall proxy."""
@@ -76,6 +83,7 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._control_secret = control_secret
         self._session = async_get_clientsession(hass)
         self._max_backup_minutes = int(max_backup_minutes)
+        self._cycle = 0
         _LOGGER.debug(
             "Coordinator initialised: base_url=%s interval=%ss control=%s",
             self._base_url,
@@ -150,12 +158,25 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return f"{path}?token={self._control_secret}"
         return path
 
+    def _due(self, key: str) -> bool:
+        """Whether this endpoint should be fetched on this cycle."""
+        if key not in SLOW_POLL_KEYS or self._cycle % SLOW_POLL_EVERY == 0:
+            return True
+        # not due: only skip if we already have a value from an earlier cycle
+        return self.data is None or key not in self.data
+
     async def _async_update_data(self) -> dict[str, Any]:
+        todo = [(key, path, required) for key, path, required in ENDPOINTS if self._due(key)]
         results = await asyncio.gather(
-            *(self._fetch(self._path_for(path), required) for _key, path, required in ENDPOINTS)
+            *(self._fetch(self._path_for(path), required) for _key, path, required in todo)
         )
+        self._cycle += 1
+
         data: dict[str, Any] = {}
-        for (key, _path, _required), value in zip(ENDPOINTS, results, strict=True):
+        fetched = {key: value for (key, _p, _r), value in zip(todo, results, strict=True)}
+        for key, _path, _required in ENDPOINTS:
+            # slow-poll key not due this cycle -> carry the previous value
+            value = fetched[key] if key in fetched else (self.data or {}).get(key)
             data[key] = value if value is not None or key not in DICT_DEFAULT_KEYS else {}
 
         # Failsafe: if all core endpoints came back empty, the proxy is not usable.
@@ -163,7 +184,8 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed("All core endpoints returned no data")
 
         _LOGGER.debug(
-            "Refreshed %d endpoints from %s (%d without data)",
+            "Refreshed %d/%d endpoints from %s (%d without data)",
+            len(todo),
             len(ENDPOINTS),
             self._base_url,
             sum(1 for v in results if v is None),

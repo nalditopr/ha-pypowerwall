@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f2937"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <!-- rounded tile -->
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#bg)"/>
+  <!-- powerwall body -->
+  <rect x="78" y="40" width="100" height="176" rx="18" fill="#e5e7eb"/>
+  <rect x="88" y="50" width="80" height="156" rx="12" fill="#f8fafc"/>
+  <!-- status slot -->
+  <rect x="112" y="60" width="32" height="6" rx="3" fill="#94a3b8"/>
+  <!-- lightning bolt -->
+  <path d="M136 82 L106 140 H128 L120 178 L152 116 H130 Z" fill="url(#bolt)" stroke="#b45309" stroke-width="3" stroke-linejoin="round"/>
+  <!-- proxy relay chevrons (right side) -->
+  <path d="M188 112 l16 16 -16 16" fill="none" stroke="#38bdf8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M206 100 l28 28 -28 28" fill="none" stroke="#38bdf8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+  <!-- left chevrons (incoming) -->
+  <path d="M68 144 l-16 -16 16 -16" fill="none" stroke="#38bdf8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M50 156 l-28 -28 28 -28" fill="none" stroke="#38bdf8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+</svg>

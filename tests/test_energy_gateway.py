@@ -5,7 +5,7 @@ from homeassistant.helpers import device_registry as dr
 import pytest
 
 from custom_components.pypowerwall.diagnostics import async_get_config_entry_diagnostics
-from custom_components.pypowerwall.sensor import _capacity_pct, _grid_frequency, _pack_count
+from custom_components.pypowerwall.sensor_descriptions import _capacity_pct, _grid_frequency, _pack_count
 
 from .conftest import load_fixture
 

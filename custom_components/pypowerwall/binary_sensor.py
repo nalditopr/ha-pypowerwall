@@ -49,9 +49,11 @@ async def async_setup_entry(
         PyPowerwallGridConnected(coordinator, entry_id),
         PyPowerwallGridFault(coordinator, entry_id),
         PyPowerwallProxyDegraded(coordinator, entry_id),
+        PyPowerwallProxyFallback(coordinator, entry_id),
         PyPowerwallConnectedToTesla(coordinator, entry_id),
         PyPowerwallAlertsActive(coordinator, entry_id),
     ]
+    entities.extend(PyPowerwallTransport(coordinator, entry_id, n) for n in transport_names(coordinator))
 
     vitals = coordinator.data.get("vitals") or {}
     block_by_serial = build_block_by_serial(coordinator.data)
@@ -456,3 +458,72 @@ class PyPowerwallStringConnected(PyPowerwallEntity, BinarySensorEntity):
             return bool(val)
         except (KeyError, TypeError):
             return None
+
+
+class PyPowerwallProxyFallback(PyPowerwallEntity, BinarySensorEntity):
+    """On while the proxy serves fallback/cached data (lost its primary transport)."""
+
+    _attr_translation_key = "proxy_fallback"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: PyPowerwallCoordinator, entry_id: str) -> None:
+        super().__init__(coordinator, entry_id)
+        self._attr_unique_id = f"{entry_id}_proxy_fallback"
+
+    @property
+    def is_on(self) -> bool | None:
+        fb = (self.coordinator.data.get("health") or {}).get("fallback_mode")
+        if not isinstance(fb, dict):
+            return None
+        return bool(fb.get("is_fallback_mode"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        fb = (self.coordinator.data.get("health") or {}).get("fallback_mode") or {}
+        return {
+            k: fb.get(k)
+            for k in ("fallback_since", "fallback_duration_seconds", "recovery_attempts", "next_attempt_at")
+        }
+
+
+class PyPowerwallTransport(PyPowerwallEntity, BinarySensorEntity):
+    """Connectivity of one proxy -> gateway transport (v1r_lan, wifi_tedapi, lan_control...)."""
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "transport"
+
+    def __init__(self, coordinator: PyPowerwallCoordinator, entry_id: str, name: str) -> None:
+        super().__init__(coordinator, entry_id)
+        self._transport = name
+        self._attr_unique_id = f"{entry_id}_transport_{name}"
+        self._attr_translation_placeholders = {"transport": name}
+
+    @property
+    def _data(self) -> dict[str, Any] | None:
+        t = (self.coordinator.data.get("health") or {}).get("transports")
+        if isinstance(t, dict) and isinstance(t.get(self._transport), dict):
+            return t[self._transport]
+        return None
+
+    @property
+    def is_on(self) -> bool | None:
+        d = self._data
+        if d is None:
+            return None
+        if "status" in d:
+            return d.get("status") == "ok" and bool(d.get("active", True))
+        return bool(d.get("active"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        d = self._data or {}
+        # host is intentionally not exposed as an attribute
+        return {k: v for k, v in d.items() if k not in ("host",)}
+
+
+def transport_names(coordinator: PyPowerwallCoordinator) -> list[str]:
+    """Transport keys reported by the proxy at setup time."""
+    t = (coordinator.data.get("health") or {}).get("transports")
+    return sorted(t) if isinstance(t, dict) else []
