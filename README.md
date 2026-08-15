@@ -74,7 +74,7 @@ Or manually add the custom repository:
 ## Requirements
 
 - Running [pypowerwall][pypowerwall] proxy (e.g. `pypowerwall proxy -port 8675`)
-- Home Assistant 2024.1+
+- Home Assistant 2024.12+
 
 ## Credits
 

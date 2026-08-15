@@ -1,18 +1,48 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import timedelta
+import logging
 from typing import Any
 
 import aiohttp
-
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)
+
+# (result key, path, required)
+# Required endpoints raise UpdateFailed on error; optional ones resolve to None.
+ENDPOINTS: tuple[tuple[str, str, bool], ...] = (
+    ("aggregates", "/aggregates", True),
+    ("vitals", "/vitals", True),
+    ("health", "/health", True),
+    ("json", "/json", False),
+    ("version_info", "/version", False),
+    ("operation", "/api/operation", False),
+    ("system_status", "/api/system_status", False),
+    ("sitemaster", "/api/sitemaster", False),
+    ("pod", "/pod", False),
+    ("troubleshooting", "/api/troubleshooting/problems", False),
+    ("stats", "/stats", False),
+    ("gateway_status", "/api/status", False),
+    ("grid_status", "/api/system_status/grid_status", False),
+    # Control state (only meaningful when PW_CONTROL_SECRET is set on the proxy)
+    ("control_grid_charging", "/control/grid_charging", False),
+    ("control_grid_export", "/control/grid_export", False),
+    ("control_max_backup", "/control/max_backup", False),
+)
+
+# Keys whose value should default to {} rather than None when missing.
+DICT_DEFAULT_KEYS = frozenset(
+    {"json", "aggregates", "vitals", "health", "version_info", "system_status", "sitemaster"}
+)
 
 
 class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -32,122 +62,82 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name=DOMAIN,
             update_interval=timedelta(seconds=scan_interval),
         )
+        self.host = host
+        self.port = port
         self._base_url = f"http://{host}:{port}"
         self._control_secret = control_secret
+        self._session = async_get_clientsession(hass)
         self.max_backup_duration: int = 3600
         _LOGGER.debug(
-            "PyPowerwallCoordinator initialised, base_url=%s, interval=%ss, control=%s",
+            "Coordinator initialised: base_url=%s interval=%ss control=%s",
             self._base_url,
             scan_interval,
             "enabled" if control_secret else "disabled",
         )
 
-    async def _async_update_data(self) -> dict[str, Any]:
-        _LOGGER.debug("Starting data refresh from %s", self._base_url)
-        connector = aiohttp.TCPConnector(force_close=True)
-        try:
-            async with aiohttp.ClientSession(connector=connector) as session:
-                # Fire all requests concurrently
-                (
-                    aggregates,
-                    vitals,
-                    health,
-                    data,
-                    version_info,
-                    operation,
-                    system_status,
-                    sitemaster,
-                    pod,
-                    troubleshooting,
-                    stats,
-                    control_grid_charging,
-                    control_grid_export,
-                    control_max_backup,
-                ) = await asyncio.gather(
-                    # Required endpoints
-                    self._get(session, "/aggregates"),
-                    self._get(session, "/vitals"),
-                    self._get(session, "/health"),
-                    # Optional endpoints
-                    self._get_optional(session, "/json"),
-                    self._get_optional(session, "/version"),
-                    self._get_optional(session, "/api/operation"),
-                    self._get_optional(session, "/api/system_status"),
-                    self._get_optional(session, "/api/sitemaster"),
-                    self._get_optional(session, "/pod"),
-                    self._get_optional(session, "/api/troubleshooting/problems"),
-                    self._get_optional(session, "/stats"),
-                    # Control state (only available when PW_CONTROL_SECRET is set on proxy)
-                    self._get_optional(session, "/control/grid_charging"),
-                    self._get_optional(session, "/control/grid_export"),
-                    self._get_optional(session, "/control/max_backup"),
-                )
-        except UpdateFailed:
-            raise
-        except Exception as err:
-            _LOGGER.exception("Unexpected error fetching pypowerwall data")
-            raise UpdateFailed(f"Unexpected error: {err}") from err
-
-        # Failsafe: if all core endpoints return None, proxy is down
-        if all(v is None for v in [aggregates, vitals, health]):
-            raise UpdateFailed("All core endpoints unreachable")
-
-        return {
-            "json": data or {},
-            "aggregates": aggregates or {},
-            "vitals": vitals or {},
-            "health": health or {},
-            "version_info": version_info or {},
-            "operation": operation,
-            "system_status": system_status or {},
-            "sitemaster": sitemaster or {},
-            "pod": pod,
-            "troubleshooting": troubleshooting,
-            "stats": stats,
-            "control_grid_charging": control_grid_charging,
-            "control_grid_export": control_grid_export,
-            "control_max_backup": control_max_backup,
-        }
-
-    async def _get(self, session: aiohttp.ClientSession, path: str) -> Any:
-        url = f"{self._base_url}{path}"
-        _LOGGER.debug("GET %s", url)
-        try:
-            async with session.get(
-                url,
-                headers={"Connection": "close"},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                _LOGGER.debug("Response %s: status=%s", url, resp.status)
-                resp.raise_for_status()
-                return await resp.json(content_type=None)
-        except aiohttp.ClientError as err:
-            _LOGGER.error("ClientError on GET %s: %s (%s)", url, err, type(err).__name__)
-            raise UpdateFailed(f"Error communicating with pypowerwall proxy: {err}") from err
-
-    async def _get_optional(self, session: aiohttp.ClientSession, path: str) -> Any:
-        """Fetch an endpoint, returning None on 404 or any client error."""
-        url = f"{self._base_url}{path}"
-        _LOGGER.debug("GET (optional) %s", url)
-        try:
-            async with session.get(
-                url,
-                headers={"Connection": "close"},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                if resp.status == 404:
-                    _LOGGER.debug("Optional endpoint %s returned 404", url)
-                    return None
-                resp.raise_for_status()
-                return await resp.json(content_type=None)
-        except aiohttp.ClientError as err:
-            _LOGGER.debug("Optional endpoint %s failed: %s", url, err)
-            return None
+    @property
+    def base_url(self) -> str:
+        """Return the proxy base URL."""
+        return self._base_url
 
     @property
     def has_control_secret(self) -> bool:
         """Return True if a control secret is configured."""
         return bool(self._control_secret)
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        results = await asyncio.gather(
+            *(self._fetch(path, required) for _key, path, required in ENDPOINTS)
+        )
+        data: dict[str, Any] = {}
+        for (key, _path, _required), value in zip(ENDPOINTS, results, strict=True):
+            data[key] = value if value is not None or key not in DICT_DEFAULT_KEYS else {}
+
+        # Failsafe: if all core endpoints came back empty, the proxy is not usable.
+        if not any(data[k] for k in ("aggregates", "vitals", "health")):
+            raise UpdateFailed("All core endpoints returned no data")
+
+        _LOGGER.debug(
+            "Refreshed %d endpoints from %s (%d without data)",
+            len(ENDPOINTS),
+            self._base_url,
+            sum(1 for v in results if v is None),
+        )
+        return data
+
+    async def _fetch(self, path: str, required: bool) -> Any:
+        """GET one proxy endpoint and return its parsed JSON.
+
+        Required endpoints raise UpdateFailed on any failure. Optional
+        endpoints return None on 404 / errors so the rest of the update
+        can proceed. A 401/403 always means the proxy rejected our request
+        (bad or missing control secret) -> reauth.
+        """
+        url = f"{self._base_url}{path}"
+        try:
+            async with self._session.get(url, timeout=REQUEST_TIMEOUT) as resp:
+                if resp.status in (401, 403):
+                    raise ConfigEntryAuthFailed(
+                        f"pypowerwall proxy rejected request to {path} (HTTP {resp.status})"
+                    )
+                if resp.status == 404 and not required:
+                    return None
+                resp.raise_for_status()
+                return await resp.json(content_type=None)
+        except ConfigEntryAuthFailed:
+            raise
+        except (aiohttp.ClientError, TimeoutError) as err:
+            if required:
+                raise UpdateFailed(
+                    f"Error communicating with pypowerwall proxy ({path}): {err}"
+                ) from err
+            _LOGGER.debug("Optional endpoint %s unavailable: %s", path, err)
+            return None
+        except ValueError as err:  # invalid JSON
+            if required:
+                raise UpdateFailed(f"Invalid JSON from {path}: {err}") from err
+            _LOGGER.debug("Optional endpoint %s returned invalid JSON: %s", path, err)
+            return None
 
     async def send_command(self, path: str, value: str | int | float) -> bool:
         """POST a control command to the proxy.
@@ -156,23 +146,24 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
           curl -X POST -d "value=VALUE&token=SECRET" http://host:port/control/...
         """
         if not self._control_secret:
-            _LOGGER.error("Control secret not configured — cannot send command")
+            _LOGGER.error("Control secret not configured - cannot send command")
             return False
         url = f"{self._base_url}{path}"
         form_data = {"value": str(value), "token": self._control_secret}
         _LOGGER.debug("POST %s value=%s", url, value)
-        connector = aiohttp.TCPConnector(force_close=True)
         try:
-            async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.post(
-                    url,
-                    data=form_data,
-                    headers={"Connection": "close"},
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    _LOGGER.debug("POST %s: status=%s", url, resp.status)
-                    resp.raise_for_status()
-                    return True
-        except aiohttp.ClientError as err:
+            async with self._session.post(
+                url, data=form_data, timeout=REQUEST_TIMEOUT
+            ) as resp:
+                if resp.status in (401, 403):
+                    _LOGGER.error(
+                        "POST %s rejected (HTTP %s): check the control secret",
+                        url,
+                        resp.status,
+                    )
+                    return False
+                resp.raise_for_status()
+                return True
+        except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.error("POST %s failed: %s", url, err)
             return False

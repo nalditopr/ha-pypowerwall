@@ -22,7 +22,6 @@ from .entity import (
     parse_vitals_key,
 )
 
-
 # ---------------------------------------------------------------------------
 #  Pod health flag definitions
 # ---------------------------------------------------------------------------
@@ -59,7 +58,7 @@ async def async_setup_entry(
     device_labels = build_device_labels(block_by_serial, vitals)
 
     # --- Per-pod alert and health binary sensors ---
-    for vkey, vdata in vitals.items():
+    for vkey, _vdata in vitals.items():
         if not vkey.startswith("TEPOD"):
             continue
         part_number, serial = parse_vitals_key(vkey)
@@ -86,7 +85,7 @@ async def async_setup_entry(
             )
 
     # --- Island grid connected (TESYNC) ---
-    for vkey, vdata in vitals.items():
+    for vkey, _vdata in vitals.items():
         if not vkey.startswith("TESYNC"):
             continue
         part_number, serial = parse_vitals_key(vkey)
@@ -108,7 +107,7 @@ async def async_setup_entry(
             _, pvs_serial = parse_vitals_key(vkey)
             pvs_by_serial[pvs_serial] = vkey
 
-    for pvac_vkey, pvac_part, pvac_serial in pvac_entries:
+    for _pvac_vkey, pvac_part, pvac_serial in pvac_entries:
         label = device_labels.get(pvac_serial, "Primary")
         pvs_key = pvs_by_serial.get(pvac_serial)
         if pvs_key:
