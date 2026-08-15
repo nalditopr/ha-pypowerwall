@@ -33,6 +33,8 @@ ENDPOINTS: tuple[tuple[str, str, bool], ...] = (
     ("stats", "/stats", False),
     ("gateway_status", "/api/status", False),
     ("grid_status", "/api/system_status/grid_status", False),
+    ("meters_site", "/api/meters/site", False),
+    ("meters_solar", "/api/meters/solar", False),
     # Control state (only meaningful when PW_CONTROL_SECRET is set on the proxy)
     ("control_grid_charging", "/control/grid_charging", False),
     ("control_grid_export", "/control/grid_export", False),

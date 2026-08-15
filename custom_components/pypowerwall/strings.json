@@ -199,6 +199,42 @@
       },
       "island_grid_state": {
         "name": "Island Grid State"
+      },
+      "grid_energy_imported": {
+        "name": "Grid Energy Imported"
+      },
+      "grid_energy_exported": {
+        "name": "Grid Energy Exported"
+      },
+      "solar_energy_produced": {
+        "name": "Solar Energy Produced"
+      },
+      "battery_energy_charged": {
+        "name": "Battery Energy Charged"
+      },
+      "battery_energy_discharged": {
+        "name": "Battery Energy Discharged"
+      },
+      "home_energy_consumed": {
+        "name": "Home Energy Consumed"
+      },
+      "site_full_pack_energy": {
+        "name": "Battery Full Capacity"
+      },
+      "site_energy_remaining": {
+        "name": "Battery Energy Remaining"
+      },
+      "battery_capacity_health": {
+        "name": "Battery Capacity Health"
+      },
+      "available_blocks": {
+        "name": "Available Powerwalls"
+      },
+      "island_state": {
+        "name": "Island State"
+      },
+      "gateway_uptime": {
+        "name": "Gateway Started"
       }
     },
     "binary_sensor": {

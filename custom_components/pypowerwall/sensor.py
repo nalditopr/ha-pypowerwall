@@ -24,6 +24,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import PyPowerwallCoordinator
@@ -53,11 +54,102 @@ class VitalsSensorDescription(SensorEntityDescription):
 # ---------------------------------------------------------------------------
 #  Helpers
 # ---------------------------------------------------------------------------
-def _vitals_frequency(d: dict) -> float | None:
-    for key, val in (d.get("vitals") or {}).items():
-        if key.startswith("PVAC"):
+def _grid_frequency(d: dict) -> float | None:
+    """Grid-side frequency.
+
+    Preference: system_status.f_out (site level; null on some firmwares) ->
+    TESYNC ISLAND_FreqL1_Main (grid side of the island controller) ->
+    per-Powerwall f_out from battery_blocks -> PVAC_Fout (solar inverter
+    output, only equal to the grid while on-grid; last resort).
+    """
+    ss = d.get("system_status") or {}
+    if ss.get("f_out"):
+        return ss["f_out"]
+    vitals = d.get("vitals") or {}
+    for key, val in vitals.items():
+        if key.startswith("TESYNC") and isinstance(val, dict) and val.get("ISLAND_FreqL1_Main"):
+            return val["ISLAND_FreqL1_Main"]
+    block_f = [b.get("f_out") for b in ss.get("battery_blocks") or [] if b.get("f_out")]
+    if block_f:
+        return round(sum(block_f) / len(block_f), 3)
+    for key, val in vitals.items():
+        if key.startswith("PVAC") and isinstance(val, dict):
             return val.get("PVAC_Fout")
     return None
+
+
+def _site_meter_energy(d: dict, field: str) -> float | None:
+    """Sum a lifetime energy field over the site meters in /api/meters/site.
+
+    The endpoint returns a list of meters (location 'site'), each with
+    Cached_readings.energy_imported/exported in Wh.
+    """
+    meters = d.get("meters_site")
+    if not isinstance(meters, list):
+        return None
+    total = 0.0
+    seen = False
+    for m in meters:
+        if not isinstance(m, dict) or m.get("location") not in (None, "site"):
+            continue
+        v = (m.get("Cached_readings") or {}).get(field)
+        if v:
+            total += float(v)
+            seen = True
+    return total if seen else None
+
+
+def _energy(section: str, field: str):
+    """Lifetime energy counter (Wh) for a meter section.
+
+    /api/meters/site is authoritative for the site meter; /aggregates carries
+    the same fields for site/battery/load/solar but is zeroed on some proxy
+    transports (tedapi/v1r), so a 0 there is treated as 'unknown' and the
+    entity keeps its last value instead of resetting a TOTAL_INCREASING sensor.
+    """
+
+    def _fn(d: dict) -> float | None:
+        if section == "site":
+            v = _site_meter_energy(d, field)
+            if v:
+                return v
+        v = (d.get("aggregates") or {}).get(section, {}).get(field)
+        return v if v else None
+
+    return _fn
+
+
+def _parse_ts(value):
+    """Parse an ISO timestamp from the proxy into an aware datetime (or None)."""
+    if not value:
+        return None
+    return dt_util.parse_datetime(str(value))
+
+
+# Energy sensors are only created when the proxy actually reports the counter
+# (some transports zero /aggregates energy fields; then only /api/meters/site works).
+ENERGY_SENSOR_KEYS = frozenset(
+    {
+        "grid_energy_imported",
+        "grid_energy_exported",
+        "solar_energy_produced",
+        "battery_energy_charged",
+        "battery_energy_discharged",
+        "home_energy_consumed",
+    }
+)
+
+
+def _capacity_pct(d: dict) -> float | None:
+    """Usable capacity as % of the pack's original nominal (13.5 kWh per Powerwall 2/+ block)."""
+    ss = d.get("system_status") or {}
+    full = ss.get("nominal_full_pack_energy")
+    blocks = ss.get("battery_blocks") or []
+    if not full or not blocks:
+        return None
+    # Powerwall 2, Powerwall+, Powerwall 3 and their expansion packs are all 13.5 kWh nominal.
+    nominal = 13500 * len(blocks)
+    return round(full / nominal * 100, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +249,7 @@ MAIN_SENSORS: tuple[PyPowerwallSensorDescription, ...] = (
         device_class=SensorDeviceClass.FREQUENCY,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
-        value_fn=_vitals_frequency,
+        value_fn=_grid_frequency,
     ),
     # Alerts
     PyPowerwallSensorDescription(
@@ -216,6 +308,132 @@ MAIN_SENSORS: tuple[PyPowerwallSensorDescription, ...] = (
         icon="mdi:chip",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: (d.get("version_info") or {}).get("version"),
+    ),
+    # Energy (lifetime counters -> Energy Dashboard)
+    PyPowerwallSensorDescription(
+        key="grid_energy_imported",
+        translation_key="grid_energy_imported",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        suggested_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+        icon="mdi:transmission-tower-import",
+        value_fn=_energy("site", "energy_imported"),
+    ),
+    PyPowerwallSensorDescription(
+        key="grid_energy_exported",
+        translation_key="grid_energy_exported",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        suggested_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+        icon="mdi:transmission-tower-export",
+        value_fn=_energy("site", "energy_exported"),
+    ),
+    PyPowerwallSensorDescription(
+        key="solar_energy_produced",
+        translation_key="solar_energy_produced",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        suggested_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+        icon="mdi:solar-power-variant",
+        value_fn=_energy("solar", "energy_exported"),
+    ),
+    PyPowerwallSensorDescription(
+        key="battery_energy_charged",
+        translation_key="battery_energy_charged",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        suggested_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+        icon="mdi:battery-arrow-up",
+        value_fn=_energy("battery", "energy_imported"),
+    ),
+    PyPowerwallSensorDescription(
+        key="battery_energy_discharged",
+        translation_key="battery_energy_discharged",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        suggested_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+        icon="mdi:battery-arrow-down",
+        value_fn=_energy("battery", "energy_exported"),
+    ),
+    PyPowerwallSensorDescription(
+        key="home_energy_consumed",
+        translation_key="home_energy_consumed",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        suggested_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+        icon="mdi:home-lightning-bolt-outline",
+        value_fn=_energy("load", "energy_imported"),
+    ),
+    # Site battery capacity
+    PyPowerwallSensorDescription(
+        key="site_full_pack_energy",
+        translation_key="site_full_pack_energy",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        suggested_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY_STORAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:battery",
+        value_fn=lambda d: (d.get("system_status") or {}).get("nominal_full_pack_energy"),
+    ),
+    PyPowerwallSensorDescription(
+        key="site_energy_remaining",
+        translation_key="site_energy_remaining",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        suggested_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY_STORAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:battery-70",
+        value_fn=lambda d: (d.get("system_status") or {}).get("nominal_energy_remaining"),
+    ),
+    PyPowerwallSensorDescription(
+        key="battery_capacity_health",
+        translation_key="battery_capacity_health",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:battery-heart-variant",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_capacity_pct,
+    ),
+    PyPowerwallSensorDescription(
+        key="available_blocks",
+        translation_key="available_blocks",
+        icon="mdi:battery-multiple",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: (d.get("system_status") or {}).get("available_blocks"),
+    ),
+    PyPowerwallSensorDescription(
+        key="island_state",
+        translation_key="island_state",
+        icon="mdi:transmission-tower",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: (d.get("system_status") or {}).get("system_island_state")
+        or (d.get("grid_status") or {}).get("grid_status"),
+    ),
+    # Gateway
+    PyPowerwallSensorDescription(
+        key="gateway_uptime",
+        translation_key="gateway_uptime",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:clock-start",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _parse_ts((d.get("gateway_status") or {}).get("start_time")),
     ),
 )
 
@@ -814,6 +1032,14 @@ async def async_setup_entry(
 
     # --- Main device sensors ---
     for desc in MAIN_SENSORS:
+        if desc.key in ENERGY_SENSOR_KEYS:
+            try:
+                has_data = desc.value_fn(coordinator.data) is not None
+            except (KeyError, TypeError, AttributeError):
+                has_data = False
+            if not has_data:
+                _LOGGER.debug("Skipping %s: proxy reports no lifetime counter for it", desc.key)
+                continue
         entities.append(PyPowerwallSensor(coordinator, entry_id, desc))
 
     vitals = coordinator.data.get("vitals") or {}
