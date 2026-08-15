@@ -334,5 +334,124 @@
         }
       }
     }
+  },
+  "services": {
+    "set_reserve": {
+      "name": "Fijar reserva de respaldo",
+      "description": "Fija el porcentaje de reserva de respaldo.",
+      "fields": {
+        "reserve": {
+          "name": "Reserva",
+          "description": "Reserva de respaldo en porcentaje (0-100)."
+        },
+        "config_entry_id": {
+          "name": "Entrada PyPowerwall",
+          "description": "Qué proxy pypowerwall usar (solo necesario con más de uno)."
+        }
+      }
+    },
+    "set_mode": {
+      "name": "Fijar modo de operación",
+      "description": "Fija el modo de operación del Powerwall.",
+      "fields": {
+        "mode": {
+          "name": "Modo",
+          "description": "self_consumption, backup o autonomous (control por horario)."
+        },
+        "config_entry_id": {
+          "name": "Entrada PyPowerwall",
+          "description": "Qué proxy pypowerwall usar (solo necesario con más de uno)."
+        }
+      }
+    },
+    "set_grid_export": {
+      "name": "Fijar política de exportación",
+      "description": "Controla qué se puede exportar a la red.",
+      "fields": {
+        "policy": {
+          "name": "Política",
+          "description": "battery_ok (todo), pv_only (solo solar) o never."
+        },
+        "config_entry_id": {
+          "name": "Entrada PyPowerwall",
+          "description": "Qué proxy pypowerwall usar (solo necesario con más de uno)."
+        }
+      }
+    },
+    "set_grid_charging": {
+      "name": "Fijar carga desde la red",
+      "description": "Permite o prohíbe cargar la batería desde la red.",
+      "fields": {
+        "enabled": {
+          "name": "Activado",
+          "description": "True para permitir la carga desde la red."
+        },
+        "config_entry_id": {
+          "name": "Entrada PyPowerwall",
+          "description": "Qué proxy pypowerwall usar (solo necesario con más de uno)."
+        }
+      }
+    },
+    "start_max_backup": {
+      "name": "Iniciar respaldo máximo",
+      "description": "Carga al 100% y lo mantiene (evento de respaldo manual) durante un tiempo.",
+      "fields": {
+        "minutes": {
+          "name": "Duración",
+          "description": "Minutos de respaldo máximo. Por defecto usa la entidad Duración de respaldo máximo."
+        },
+        "config_entry_id": {
+          "name": "Entrada PyPowerwall",
+          "description": "Qué proxy pypowerwall usar (solo necesario con más de uno)."
+        }
+      }
+    },
+    "cancel_max_backup": {
+      "name": "Cancelar respaldo máximo",
+      "description": "Cancela el evento de respaldo manual actual.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Entrada PyPowerwall",
+          "description": "Qué proxy pypowerwall usar (solo necesario con más de uno)."
+        }
+      }
+    }
+  },
+  "selector": {
+    "operation_mode": {
+      "options": {
+        "self_consumption": "Autoconsumo",
+        "backup": "Solo respaldo",
+        "autonomous": "Control por horario"
+      }
+    },
+    "grid_export": {
+      "options": {
+        "battery_ok": "Batería OK",
+        "pv_only": "Solo solar",
+        "never": "Nunca"
+      }
+    }
+  },
+  "issues": {
+    "proxy_degraded": {
+      "title": "El proxy pypowerwall está degradado",
+      "description": "El proxy pypowerwall en {host} informa de una conexión degradada con el gateway Powerwall (fallos consecutivos). Los datos pueden estar desactualizados. Revisa los logs del proxy y su conexión con el gateway."
+    },
+    "proxy_fallback": {
+      "title": "El proxy pypowerwall está en modo de respaldo",
+      "description": "El proxy pypowerwall en {host} perdió su transporte principal al gateway y sirve datos en caché. Revisa los logs del proxy; se recuperará solo cuando el gateway vuelva a estar accesible."
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "No hay ninguna entrada pypowerwall con id {entry_id}."
+    },
+    "entry_ambiguous": {
+      "message": "Hay más de un proxy pypowerwall configurado; indica config_entry_id."
+    },
+    "no_control_secret": {
+      "message": "Los controles están desactivados: configura el secreto de control (PW_CONTROL_SECRET) para esta entrada pypowerwall."
+    }
   }
 }

@@ -5,3 +5,17 @@ CONF_SCAN_INTERVAL = "scan_interval"
 CONF_CONTROL_SECRET = "control_secret"
 DEFAULT_PORT = 8675
 DEFAULT_SCAN_INTERVAL = 30
+CONF_MAX_BACKUP_MINUTES = "max_backup_minutes"
+DEFAULT_MAX_BACKUP_MINUTES = 60
+
+SERVICE_SET_RESERVE = "set_reserve"
+SERVICE_SET_MODE = "set_mode"
+SERVICE_SET_GRID_EXPORT = "set_grid_export"
+SERVICE_SET_GRID_CHARGING = "set_grid_charging"
+SERVICE_START_MAX_BACKUP = "start_max_backup"
+SERVICE_CANCEL_MAX_BACKUP = "cancel_max_backup"
+ATTR_RESERVE = "reserve"
+ATTR_MODE = "mode"
+ATTR_POLICY = "policy"
+ATTR_ENABLED = "enabled"
+ATTR_MINUTES = "minutes"

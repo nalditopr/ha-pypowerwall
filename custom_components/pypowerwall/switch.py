@@ -75,14 +75,26 @@ class PyPowerwallMaxBackup(PyPowerwallEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
+        # 'manual_backup' can linger after expiry -> use the active flag, not presence
+        return self.coordinator.max_backup_active
+
+    @property
+    def extra_state_attributes(self) -> dict | None:
         data = self.coordinator.data.get("control_max_backup")
-        if data and isinstance(data, dict):
-            return data.get("manual_backup") is not None
-        return None
+        mb = data.get("manual_backup") if isinstance(data, dict) else None
+        if not mb:
+            return None
+        return {
+            "start_time": mb.get("start_time"),
+            "end_time": mb.get("end_time"),
+            "duration_seconds": mb.get("duration_seconds"),
+        }
 
     async def async_turn_on(self, **kwargs) -> None:
-        # Must cancel any existing/expired max backup before setting a new one
-        if self.is_on:
+        # Must cancel any existing (possibly lingering) event before scheduling a new one
+        data = self.coordinator.data.get("control_max_backup")
+        lingering = isinstance(data, dict) and data.get("manual_backup") is not None
+        if lingering:
             cancel_ok = await self.coordinator.send_command(
                 "/control/max_backup", "cancel"
             )

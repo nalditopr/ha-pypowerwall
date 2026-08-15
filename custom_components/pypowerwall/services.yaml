@@ -1,0 +1,88 @@
+set_reserve:
+  fields:
+    reserve:
+      required: true
+      example: 20
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: pypowerwall
+
+set_mode:
+  fields:
+    mode:
+      required: true
+      example: self_consumption
+      selector:
+        select:
+          options:
+            - self_consumption
+            - backup
+            - autonomous
+          translation_key: operation_mode
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: pypowerwall
+
+set_grid_export:
+  fields:
+    policy:
+      required: true
+      example: battery_ok
+      selector:
+        select:
+          options:
+            - battery_ok
+            - pv_only
+            - never
+          translation_key: grid_export
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: pypowerwall
+
+set_grid_charging:
+  fields:
+    enabled:
+      required: true
+      example: true
+      selector:
+        boolean:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: pypowerwall
+
+start_max_backup:
+  fields:
+    minutes:
+      required: false
+      example: 60
+      selector:
+        number:
+          min: 1
+          max: 480
+          unit_of_measurement: min
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: pypowerwall
+
+cancel_max_backup:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: pypowerwall
