@@ -31,11 +31,13 @@ No Python pypowerwall library required in HA — pure `aiohttp`.
 
 | Platform        | Description                                                                              |
 | --------------- | ---------------------------------------------------------------------------------------- |
-| `sensor`        | Power, battery, grid, inverter, PVAC, PV string, island controller, and grid meter data  |
-| `binary_sensor` | Grid status, alerts, pod health flags, PV string connected                               |
-| `number`        | Backup reserve percentage control (requires `control_secret`)                            |
+| `sensor`        | Power, energy (Energy Dashboard), battery, grid, inverter, PVAC, PV string, island controller, grid meter, gateway & proxy diagnostics |
+| `binary_sensor` | Grid status, alerts, pod health flags, PV string connected, proxy degraded / fallback, per-transport connectivity |
+| `event`         | `alert_fired` / `alert_cleared` for automations                                          |
+| `number`        | Backup reserve %, max backup duration (requires `control_secret`)                        |
 | `select`        | Operation mode and grid export policy (requires `control_secret`)                        |
-| `switch`        | Grid charging toggle (requires `control_secret`)                                         |
+| `switch`        | Grid charging, max backup (requires `control_secret`)                                    |
+| services        | `pypowerwall.set_reserve` / `set_mode` / `set_grid_export` / `set_grid_charging` / `start_max_backup` / `cancel_max_backup` |
 
 ## Features
 
@@ -54,6 +56,9 @@ No Python pypowerwall library required in HA — pure `aiohttp`.
 - **Services** — `pypowerwall.set_reserve`, `set_mode`, `set_grid_export`, `set_grid_charging`, `start_max_backup`, `cancel_max_backup` for automations (require the control secret)
 - **Brand icon** — shipped in `custom_components/pypowerwall/brand/` (shown by HA 2026.3+ without a brands-repo submission)
 - **Repairs** — a repair issue is raised while the proxy reports a degraded connection or fallback mode, and cleared when it recovers
+- **Transport visibility** — one connectivity sensor per proxy→gateway transport (`v1r_lan`, `wifi_tedapi`, `lan_control`, …) so you can see *why* data is degraded
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for endpoints, design decisions and testing notes, and [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Installation
 
