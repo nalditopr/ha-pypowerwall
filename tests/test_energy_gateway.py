@@ -5,7 +5,12 @@ from homeassistant.helpers import device_registry as dr
 import pytest
 
 from custom_components.pypowerwall.diagnostics import async_get_config_entry_diagnostics
-from custom_components.pypowerwall.sensor_descriptions import _capacity_pct, _grid_frequency, _pack_count
+from custom_components.pypowerwall.sensor_descriptions import (
+    _capacity_pct,
+    _grid_frequency,
+    _pack_count,
+    observed_pack_count,
+)
 
 from .conftest import load_fixture
 
@@ -97,8 +102,8 @@ def test_capacity_health():
     # live bug: battery_blocks only listed 2 of 4 packs -> must not report ~212 %
     partial = {**ss, "battery_blocks": ss["battery_blocks"][:2]}
     assert _capacity_pct({"system_status": partial, "vitals": vitals}) == pct
-    # fallbacks without vitals: available_blocks, then blocks list
-    assert _pack_count({"system_status": {**ss, "available_blocks": 3}, "vitals": {}}) == 3
+    # without vitals: max of available_blocks and the blocks list
+    assert _pack_count({"system_status": {**ss, "available_blocks": 3}, "vitals": {}}) == max(3, len(ss["battery_blocks"]))
     assert _pack_count({"system_status": {**ss, "available_blocks": None}, "vitals": {}}) == len(ss["battery_blocks"])
     assert _capacity_pct({"system_status": {}}) is None
     assert _capacity_pct({"system_status": {"nominal_full_pack_energy": 1, "battery_blocks": []}}) is None
@@ -146,3 +151,50 @@ async def test_diagnostics_redacts_secret_and_hosts(hass, proxy, setup_entry):
     transports = diag["data"]["health"]["transports"]
     assert all(t.get("host") in (None, "**REDACTED**") for t in transports.values())
     assert "TG0000000001AA" in str(diag["data"]["vitals"])  # serials are kept (needed for support)
+
+
+async def test_pack_count_is_sticky_when_transport_degrades(hass, proxy, setup_entry):
+    """Live case: with wifi_tedapi degraded the gateway reported only 2 of 4 packs
+    (vitals had 2 TEPODs, battery_blocks 2, available_blocks 3) -> capacity read 212 %."""
+    from custom_components.pypowerwall.const import CONF_PACK_COUNT
+
+    coordinator = setup_entry.runtime_data.coordinator
+    assert coordinator.data["pack_count"] == 4
+    assert setup_entry.options[CONF_PACK_COUNT] == 4
+    healthy_pct = float(hass.states.get("sensor.pypowerwall_battery_capacity_health").state)
+
+    # degrade: keep only 2 TEPODs in vitals and 2 blocks
+    vitals = proxy.data["/vitals"]
+    tepods = [k for k in vitals if k.startswith("TEPOD")]
+    for k in tepods[2:]:
+        del vitals[k]
+    proxy.data["/api/system_status"]["battery_blocks"] = proxy.data["/api/system_status"]["battery_blocks"][:2]
+    proxy.data["/api/system_status"]["available_blocks"] = 3
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert observed_pack_count(coordinator.data) == 3  # what this poll shows
+    assert coordinator.data["pack_count"] == 4  # sticky
+    assert float(hass.states.get("sensor.pypowerwall_battery_capacity_health").state) == healthy_pct
+
+
+async def test_pack_count_survives_reload(hass, proxy, setup_entry):
+    from custom_components.pypowerwall.const import CONF_PACK_COUNT
+
+    assert setup_entry.options[CONF_PACK_COUNT] == 4
+    # proxy now only shows 2 packs at (re)start -> remembered value wins
+    vitals = proxy.data["/vitals"]
+    for k in [k for k in vitals if k.startswith("TEPOD")][2:]:
+        del vitals[k]
+    proxy.data["/api/system_status"]["battery_blocks"] = proxy.data["/api/system_status"]["battery_blocks"][:2]
+    proxy.data["/api/system_status"]["available_blocks"] = 2
+    await hass.config_entries.async_reload(setup_entry.entry_id)
+    await hass.async_block_till_done()
+    assert setup_entry.runtime_data.coordinator.data["pack_count"] == 4
+
+
+def test_pack_count_helpers():
+    assert _pack_count({"pack_count": 4, "vitals": {}}) == 4
+    assert _pack_count({"vitals": {"TEPOD--a": {}, "TEPOD--b": {}}, "system_status": {"available_blocks": 1}}) == 2
+    assert observed_pack_count({"vitals": {}, "system_status": {"available_blocks": 3, "battery_blocks": [{}, {}]}}) == 3
+    assert observed_pack_count({}) == 0

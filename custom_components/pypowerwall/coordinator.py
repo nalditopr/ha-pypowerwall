@@ -14,7 +14,14 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CONF_MAX_BACKUP_MINUTES, DEFAULT_MAX_BACKUP_MINUTES, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import (
+    CONF_MAX_BACKUP_MINUTES,
+    CONF_PACK_COUNT,
+    DEFAULT_MAX_BACKUP_MINUTES,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+)
+from .sensor_descriptions import observed_pack_count
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -190,8 +197,21 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._base_url,
             sum(1 for v in results if v is None),
         )
+        data["pack_count"] = self._sticky_pack_count(data)
         self._update_repairs(data)
         return data
+
+    def _sticky_pack_count(self, data: dict[str, Any]) -> int:
+        """Max number of packs ever observed (persisted), so a degraded transport
+        that hides some Powerwalls does not skew per-pack maths."""
+        seen = observed_pack_count(data)
+        remembered = int((self.config_entry.options.get(CONF_PACK_COUNT) if self.config_entry else 0) or 0)
+        best = max(seen, remembered)
+        if best > remembered and self.config_entry is not None:
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, options={**self.config_entry.options, CONF_PACK_COUNT: best}
+            )
+        return best
 
     # ------------------------------------------------------------------ repairs
     def _update_repairs(self, data: dict[str, Any]) -> None:

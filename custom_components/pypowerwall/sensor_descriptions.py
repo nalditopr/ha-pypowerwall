@@ -139,20 +139,23 @@ ENERGY_SENSOR_KEYS = frozenset(
 NOMINAL_PACK_WH = 13500  # Powerwall 2 / + / 3 and their expansion packs are all 13.5 kWh nominal
 
 
-def _pack_count(d: dict) -> int:
-    """Number of battery packs (Powerwalls + expansions) in the system.
+def observed_pack_count(d: dict) -> int:
+    """Number of battery packs (Powerwalls + expansions) visible in this poll.
 
-    `system_status.battery_blocks` is not reliable: on some firmwares it only
-    lists a subset of the packs at any given poll. Prefer counting TEPOD
-    devices in vitals (one per pack), then available_blocks, then the blocks
-    list as a last resort.
+    Counts TEPOD devices in vitals (one per pack), then available_blocks, then
+    the battery_blocks list. When a proxy transport is degraded the gateway
+    only reports a subset of the packs, so this can be *lower* than reality;
+    the coordinator keeps the maximum ever seen as data["pack_count"].
     """
     vitals = d.get("vitals") or {}
     tepods = sum(1 for k in vitals if k.startswith("TEPOD"))
-    if tepods:
-        return tepods
     ss = d.get("system_status") or {}
-    return ss.get("available_blocks") or len(ss.get("battery_blocks") or [])
+    return max(tepods, ss.get("available_blocks") or 0, len(ss.get("battery_blocks") or []))
+
+
+def _pack_count(d: dict) -> int:
+    """Sticky pack count (max ever observed), falling back to this poll's count."""
+    return int(d.get("pack_count") or observed_pack_count(d))
 
 
 def _capacity_pct(d: dict) -> float | None:
