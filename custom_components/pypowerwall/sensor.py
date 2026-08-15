@@ -140,16 +140,36 @@ ENERGY_SENSOR_KEYS = frozenset(
 )
 
 
+NOMINAL_PACK_WH = 13500  # Powerwall 2 / + / 3 and their expansion packs are all 13.5 kWh nominal
+
+
+def _pack_count(d: dict) -> int:
+    """Number of battery packs (Powerwalls + expansions) in the system.
+
+    `system_status.battery_blocks` is not reliable: on some firmwares it only
+    lists a subset of the packs at any given poll. Prefer counting TEPOD
+    devices in vitals (one per pack), then available_blocks, then the blocks
+    list as a last resort.
+    """
+    vitals = d.get("vitals") or {}
+    tepods = sum(1 for k in vitals if k.startswith("TEPOD"))
+    if tepods:
+        return tepods
+    ss = d.get("system_status") or {}
+    return ss.get("available_blocks") or len(ss.get("battery_blocks") or [])
+
+
 def _capacity_pct(d: dict) -> float | None:
-    """Usable capacity as % of the pack's original nominal (13.5 kWh per Powerwall 2/+ block)."""
+    """Full-pack energy as % of the system's nominal capacity (13.5 kWh per pack).
+
+    New packs read slightly above 100 %; the value trends down with age.
+    """
     ss = d.get("system_status") or {}
     full = ss.get("nominal_full_pack_energy")
-    blocks = ss.get("battery_blocks") or []
-    if not full or not blocks:
+    packs = _pack_count(d)
+    if not full or not packs:
         return None
-    # Powerwall 2, Powerwall+, Powerwall 3 and their expansion packs are all 13.5 kWh nominal.
-    nominal = 13500 * len(blocks)
-    return round(full / nominal * 100, 1)
+    return round(full / (NOMINAL_PACK_WH * packs) * 100, 1)
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ from homeassistant.helpers import device_registry as dr
 import pytest
 
 from custom_components.pypowerwall.diagnostics import async_get_config_entry_diagnostics
-from custom_components.pypowerwall.sensor import _capacity_pct, _grid_frequency
+from custom_components.pypowerwall.sensor import _capacity_pct, _grid_frequency, _pack_count
 
 from .conftest import load_fixture
 
@@ -88,9 +88,18 @@ async def test_grid_frequency_sensor_uses_grid_side_source(hass, proxy, setup_en
 
 def test_capacity_health():
     ss = load_fixture("api_system_status.json")
-    pct = _capacity_pct({"system_status": ss})
-    blocks = len(ss["battery_blocks"])
-    assert pct == pytest.approx(round(ss["nominal_full_pack_energy"] / (13500 * blocks) * 100, 1))
+    vitals = load_fixture("vitals.json")
+    tepods = sum(1 for k in vitals if k.startswith("TEPOD"))
+    assert tepods == 4
+    assert _pack_count({"system_status": ss, "vitals": vitals}) == 4
+    pct = _capacity_pct({"system_status": ss, "vitals": vitals})
+    assert pct == pytest.approx(round(ss["nominal_full_pack_energy"] / (13500 * 4) * 100, 1))
+    # live bug: battery_blocks only listed 2 of 4 packs -> must not report ~212 %
+    partial = {**ss, "battery_blocks": ss["battery_blocks"][:2]}
+    assert _capacity_pct({"system_status": partial, "vitals": vitals}) == pct
+    # fallbacks without vitals: available_blocks, then blocks list
+    assert _pack_count({"system_status": {**ss, "available_blocks": 3}, "vitals": {}}) == 3
+    assert _pack_count({"system_status": {**ss, "available_blocks": None}, "vitals": {}}) == len(ss["battery_blocks"])
     assert _capacity_pct({"system_status": {}}) is None
     assert _capacity_pct({"system_status": {"nominal_full_pack_energy": 1, "battery_blocks": []}}) is None
 
