@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
+import logging
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -821,7 +821,7 @@ async def async_setup_entry(
     device_labels = build_device_labels(block_by_serial, vitals)
 
     # --- Battery pod sensors (TEPOD) ---
-    for vkey, vdata in vitals.items():
+    for vkey, _vdata in vitals.items():
         if not vkey.startswith("TEPOD"):
             continue
         part_number, serial = parse_vitals_key(vkey)
@@ -834,7 +834,7 @@ async def async_setup_entry(
             )
 
     # --- Inverter sensors (TEPINV) — same device as matching pod ---
-    for vkey, vdata in vitals.items():
+    for vkey, _vdata in vitals.items():
         if not vkey.startswith("TEPINV"):
             continue
         part_number, serial = parse_vitals_key(vkey)
@@ -921,7 +921,7 @@ async def async_setup_entry(
                 )
 
     # --- Grid meter sensors (TEMSA) ---
-    for vkey, vdata in vitals.items():
+    for vkey, _vdata in vitals.items():
         if not vkey.startswith("TEMSA"):
             continue
         part_number, serial = parse_vitals_key(vkey)
@@ -942,7 +942,7 @@ async def async_setup_entry(
             )
 
     # --- Island controller sensors (TESYNC) ---
-    for vkey, vdata in vitals.items():
+    for vkey, _vdata in vitals.items():
         if not vkey.startswith("TESYNC"):
             continue
         part_number, serial = parse_vitals_key(vkey)

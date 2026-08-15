@@ -1,9 +1,12 @@
 {
   "domain": "pypowerwall",
   "name": "PyPowerwall",
+  "codeowners": ["@nalditopr"],
   "config_flow": true,
-  "documentation": "https://gitea.bb.rctechpr.net/localadmin/ha-pypowerwall",
+  "documentation": "https://github.com/nalditopr/ha-pypowerwall",
+  "integration_type": "hub",
   "iot_class": "local_polling",
-  "version": "0.1.0",
-  "requirements": []
+  "issue_tracker": "https://github.com/nalditopr/ha-pypowerwall/issues",
+  "requirements": [],
+  "version": "0.2.0"
 }

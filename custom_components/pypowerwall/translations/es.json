@@ -10,13 +10,34 @@
           "scan_interval": "Intervalo de sondeo (segundos)",
           "control_secret": "Secreto de control (PW_CONTROL_SECRET)"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigurar Proxy PyPowerwall",
+        "description": "Cambia el host, puerto, intervalo de sondeo o secreto de control de este proxy pypowerwall.",
+        "data": {
+          "host": "Host",
+          "port": "Puerto",
+          "scan_interval": "Intervalo de sondeo (segundos)",
+          "control_secret": "Secreto de control (PW_CONTROL_SECRET)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Actualizar secreto de control",
+        "description": "El proxy pypowerwall en {host} rechazó el secreto de control. Introduce el PW_CONTROL_SECRET actual (déjalo vacío para desactivar los controles).",
+        "data": {
+          "control_secret": "Secreto de control (PW_CONTROL_SECRET)"
+        }
       }
     },
     "error": {
-      "cannot_connect": "No se puede conectar al proxy pypowerwall. Verifique el host/puerto y que el proxy esté en ejecución."
+      "cannot_connect": "No se puede conectar al proxy pypowerwall. Verifique el host/puerto y que el proxy esté en ejecución.",
+      "invalid_auth": "El proxy rechazó el secreto de control. Comprueba PW_CONTROL_SECRET en el proxy.",
+      "control_unsupported": "Este proxy no tiene el modo de control activado (PW_CONTROL_SECRET no definido). Deja el secreto de control vacío."
     },
     "abort": {
-      "already_configured": "Este proxy pypowerwall ya está configurado."
+      "already_configured": "Este proxy pypowerwall ya está configurado.",
+      "reconfigure_successful": "Reconfiguración correcta",
+      "reauth_successful": "Secreto de control actualizado"
     }
   },
   "options": {
@@ -32,77 +53,211 @@
   },
   "entity": {
     "sensor": {
-      "solar_power": { "name": "Potencia Solar" },
-      "battery_power": { "name": "Potencia de Batería" },
-      "grid_power": { "name": "Potencia de Red" },
-      "home_power": { "name": "Potencia del Hogar" },
-      "battery_level": { "name": "Nivel de Batería" },
-      "battery_reserve": { "name": "Reserva de Batería" },
-      "time_remaining": { "name": "Tiempo Restante" },
-      "grid_voltage": { "name": "Voltaje de Red" },
-      "grid_frequency": { "name": "Frecuencia de Red" },
-      "alert_count": { "name": "Cantidad de Alertas" },
-      "active_alerts": { "name": "Alertas Activas" },
-      "troubleshooting_problems": { "name": "Problemas de Diagnóstico" },
-      "operation_mode": { "name": "Modo de Operación" },
-      "pypowerwall_version": { "name": "Versión de PyPowerwall" },
-      "firmware_version": { "name": "Versión de Firmware" },
-      "pod_soc": { "name": "Estado de Carga" },
-      "pod_energy_remaining": { "name": "Energía Restante" },
-      "pod_energy_to_charge": { "name": "Energía para Cargar" },
-      "pod_full_energy": { "name": "Energía Total del Paquete" },
-      "inverter_power": { "name": "Potencia del Inversor" },
-      "inverter_voltage": { "name": "Voltaje del Inversor" },
-      "inverter_frequency": { "name": "Frecuencia del Inversor" },
-      "inverter_state": { "name": "Estado del Inversor" },
-      "inverter_vsplit1": { "name": "Inversor VSplit1" },
-      "inverter_vsplit2": { "name": "Inversor VSplit2" },
-      "pvac_output_power": { "name": "Potencia de Salida PVAC" },
-      "pvac_output_voltage": { "name": "Voltaje de Salida PVAC" },
-      "pvac_vl1_ground": { "name": "PVAC VL1 Tierra" },
-      "pvac_vl2_ground": { "name": "PVAC VL2 Tierra" },
-      "pvac_state": { "name": "Estado PVAC" },
-      "grid_l1_power": { "name": "Potencia Red L1" },
-      "grid_l2_power": { "name": "Potencia Red L2" },
-      "grid_l1_voltage": { "name": "Voltaje Red L1" },
-      "grid_l2_voltage": { "name": "Voltaje Red L2" },
-      "grid_l1_current": { "name": "Corriente Red L1" },
-      "grid_l2_current": { "name": "Corriente Red L2" },
-      "grid_l1_reactive_power": { "name": "Potencia Reactiva Red L1" },
-      "grid_l2_reactive_power": { "name": "Potencia Reactiva Red L2" },
-      "grid_lifetime_energy_export": { "name": "Energía Exportada Acumulada" },
-      "grid_lifetime_energy_import": { "name": "Energía Importada Acumulada" },
-      "island_freq_l1_main": { "name": "Frecuencia Isla L1 Principal" },
-      "island_freq_l2_main": { "name": "Frecuencia Isla L2 Principal" },
-      "island_freq_l1_load": { "name": "Frecuencia Isla L1 Carga" },
-      "island_freq_l2_load": { "name": "Frecuencia Isla L2 Carga" },
-      "island_voltage_l1_main": { "name": "Voltaje Isla L1 Principal" },
-      "island_voltage_l2_main": { "name": "Voltaje Isla L2 Principal" },
-      "island_voltage_l1_load": { "name": "Voltaje Isla L1 Carga" },
-      "island_voltage_l2_load": { "name": "Voltaje Isla L2 Carga" },
-      "island_grid_state": { "name": "Estado de Red Isla" }
+      "solar_power": {
+        "name": "Potencia Solar"
+      },
+      "battery_power": {
+        "name": "Potencia de Batería"
+      },
+      "grid_power": {
+        "name": "Potencia de Red"
+      },
+      "home_power": {
+        "name": "Potencia del Hogar"
+      },
+      "battery_level": {
+        "name": "Nivel de Batería"
+      },
+      "battery_reserve": {
+        "name": "Reserva de Batería"
+      },
+      "time_remaining": {
+        "name": "Tiempo Restante"
+      },
+      "grid_voltage": {
+        "name": "Voltaje de Red"
+      },
+      "grid_frequency": {
+        "name": "Frecuencia de Red"
+      },
+      "alert_count": {
+        "name": "Cantidad de Alertas"
+      },
+      "active_alerts": {
+        "name": "Alertas Activas"
+      },
+      "troubleshooting_problems": {
+        "name": "Problemas de Diagnóstico"
+      },
+      "operation_mode": {
+        "name": "Modo de Operación"
+      },
+      "pypowerwall_version": {
+        "name": "Versión de PyPowerwall"
+      },
+      "firmware_version": {
+        "name": "Versión de Firmware"
+      },
+      "pod_soc": {
+        "name": "Estado de Carga"
+      },
+      "pod_energy_remaining": {
+        "name": "Energía Restante"
+      },
+      "pod_energy_to_charge": {
+        "name": "Energía para Cargar"
+      },
+      "pod_full_energy": {
+        "name": "Energía Total del Paquete"
+      },
+      "inverter_power": {
+        "name": "Potencia del Inversor"
+      },
+      "inverter_voltage": {
+        "name": "Voltaje del Inversor"
+      },
+      "inverter_frequency": {
+        "name": "Frecuencia del Inversor"
+      },
+      "inverter_state": {
+        "name": "Estado del Inversor"
+      },
+      "inverter_vsplit1": {
+        "name": "Inversor VSplit1"
+      },
+      "inverter_vsplit2": {
+        "name": "Inversor VSplit2"
+      },
+      "pvac_output_power": {
+        "name": "Potencia de Salida PVAC"
+      },
+      "pvac_output_voltage": {
+        "name": "Voltaje de Salida PVAC"
+      },
+      "pvac_vl1_ground": {
+        "name": "PVAC VL1 Tierra"
+      },
+      "pvac_vl2_ground": {
+        "name": "PVAC VL2 Tierra"
+      },
+      "pvac_state": {
+        "name": "Estado PVAC"
+      },
+      "grid_l1_power": {
+        "name": "Potencia Red L1"
+      },
+      "grid_l2_power": {
+        "name": "Potencia Red L2"
+      },
+      "grid_l1_voltage": {
+        "name": "Voltaje Red L1"
+      },
+      "grid_l2_voltage": {
+        "name": "Voltaje Red L2"
+      },
+      "grid_l1_current": {
+        "name": "Corriente Red L1"
+      },
+      "grid_l2_current": {
+        "name": "Corriente Red L2"
+      },
+      "grid_l1_reactive_power": {
+        "name": "Potencia Reactiva Red L1"
+      },
+      "grid_l2_reactive_power": {
+        "name": "Potencia Reactiva Red L2"
+      },
+      "grid_lifetime_energy_export": {
+        "name": "Energía Exportada Acumulada"
+      },
+      "grid_lifetime_energy_import": {
+        "name": "Energía Importada Acumulada"
+      },
+      "island_freq_l1_main": {
+        "name": "Frecuencia Isla L1 Principal"
+      },
+      "island_freq_l2_main": {
+        "name": "Frecuencia Isla L2 Principal"
+      },
+      "island_freq_l1_load": {
+        "name": "Frecuencia Isla L1 Carga"
+      },
+      "island_freq_l2_load": {
+        "name": "Frecuencia Isla L2 Carga"
+      },
+      "island_voltage_l1_main": {
+        "name": "Voltaje Isla L1 Principal"
+      },
+      "island_voltage_l2_main": {
+        "name": "Voltaje Isla L2 Principal"
+      },
+      "island_voltage_l1_load": {
+        "name": "Voltaje Isla L1 Carga"
+      },
+      "island_voltage_l2_load": {
+        "name": "Voltaje Isla L2 Carga"
+      },
+      "island_grid_state": {
+        "name": "Estado de Red Isla"
+      }
     },
     "binary_sensor": {
-      "grid_connected": { "name": "Red Conectada" },
-      "grid_fault": { "name": "Falla de Red" },
-      "proxy_degraded": { "name": "Proxy Degradado" },
-      "connected_to_tesla": { "name": "Conectado a Tesla" },
-      "alerts_active": { "name": "Alertas Activas" },
-      "pod_alerts": { "name": "Alertas" },
-      "pod_permanently_faulted": { "name": "Falla Permanente" },
-      "pod_persistently_faulted": { "name": "Falla Persistente" },
-      "pod_active_heating": { "name": "Calentamiento Activo" },
-      "pod_charge_complete": { "name": "Carga Completa" },
-      "pod_charge_request": { "name": "Solicitud de Carga" },
-      "pod_discharge_complete": { "name": "Descarga Completa" },
-      "pod_backup_ready": { "name": "Respaldo Listo" },
-      "pod_wobble_detected": { "name": "Oscilación Detectada" },
-      "pod_charge_power_clamped": { "name": "Potencia de Carga Limitada" },
-      "island_grid_connected": { "name": "Red Isla Conectada" }
+      "grid_connected": {
+        "name": "Red Conectada"
+      },
+      "grid_fault": {
+        "name": "Falla de Red"
+      },
+      "proxy_degraded": {
+        "name": "Proxy Degradado"
+      },
+      "connected_to_tesla": {
+        "name": "Conectado a Tesla"
+      },
+      "alerts_active": {
+        "name": "Alertas Activas"
+      },
+      "pod_alerts": {
+        "name": "Alertas"
+      },
+      "pod_permanently_faulted": {
+        "name": "Falla Permanente"
+      },
+      "pod_persistently_faulted": {
+        "name": "Falla Persistente"
+      },
+      "pod_active_heating": {
+        "name": "Calentamiento Activo"
+      },
+      "pod_charge_complete": {
+        "name": "Carga Completa"
+      },
+      "pod_charge_request": {
+        "name": "Solicitud de Carga"
+      },
+      "pod_discharge_complete": {
+        "name": "Descarga Completa"
+      },
+      "pod_backup_ready": {
+        "name": "Respaldo Listo"
+      },
+      "pod_wobble_detected": {
+        "name": "Oscilación Detectada"
+      },
+      "pod_charge_power_clamped": {
+        "name": "Potencia de Carga Limitada"
+      },
+      "island_grid_connected": {
+        "name": "Red Isla Conectada"
+      }
     },
     "number": {
-      "backup_reserve": { "name": "Reserva de Respaldo" },
-      "max_backup_duration": { "name": "Duración de Respaldo Máximo" }
+      "backup_reserve": {
+        "name": "Reserva de Respaldo"
+      },
+      "max_backup_duration": {
+        "name": "Duración de Respaldo Máximo"
+      }
     },
     "select": {
       "operation_mode_select": {
@@ -123,8 +278,12 @@
       }
     },
     "switch": {
-      "grid_charging": { "name": "Carga desde Red" },
-      "max_backup": { "name": "Respaldo Máximo" }
+      "grid_charging": {
+        "name": "Carga desde Red"
+      },
+      "max_backup": {
+        "name": "Respaldo Máximo"
+      }
     },
     "event": {
       "powerwall_alert": {

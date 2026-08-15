@@ -1,0 +1,11 @@
+target-version = "py313"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF006", "T20"]
+ignore = ["E501"]
+
+[lint.isort]
+force-sort-within-sections = true
+known-first-party = ["custom_components.pypowerwall"]
+combine-as-imports = true
