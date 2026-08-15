@@ -40,6 +40,7 @@ ROUTES: dict[str, str] = {
     "/api/status": "api_status.json",
     "/api/system_status/grid_status": "api_system_status_grid_status.json",
     "/api/meters/site": "api_meters_site.json",
+    "/api/meters/solar": None,  # synthesised: empty on tedapi/v1r transports
     "/control/grid_charging": "control_grid_charging.json",
     "/control/grid_export": "control_grid_export.json",
     "/control/max_backup": "control_max_backup.json",
@@ -58,6 +59,7 @@ class FakeProxy:
             path: load_fixture(f) for path, f in ROUTES.items() if f
         }
         self.data["/api/system_status/soe"] = {"percentage": 42.0}
+        self.data["/api/meters/solar"] = {}
         self.status_overrides: dict[str, int] = {}  # path -> http status
         self.control_secret: str | None = SECRET  # None -> control disabled (404)
         self.posts: list[tuple[str, dict[str, str]]] = []

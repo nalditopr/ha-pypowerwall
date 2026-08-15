@@ -8,6 +8,37 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import PyPowerwallCoordinator
 
+GATEWAY_MODELS = {
+    "1118431": "Backup Gateway 1",
+    "1152100": "Backup Gateway 2",
+    "1232100": "Backup Gateway 2",
+    "1841000": "Backup Switch",
+    "1707000": "Powerwall+ Gateway",
+    "1707001": "Powerwall 3 Gateway",
+    "1841100": "Powerwall 3 Gateway",
+}
+
+
+def gateway_device_info(coordinator: PyPowerwallCoordinator, entry_id: str) -> DeviceInfo:
+    """DeviceInfo for the hub device: the Tesla gateway (from /api/status when available)."""
+    data = coordinator.data or {}
+    status = data.get("gateway_status") or {}
+    version = (data.get("version_info") or {}).get("version") or status.get("version")
+    din = status.get("din") or ""
+    # DIN looks like "1707000-21-K--TG1234567890AB" (part number -- serial)
+    part, _, serial = din.rpartition("--") if "--" in din else ("", "", din)
+    model = GATEWAY_MODELS.get(part.split("-")[0], "Backup Gateway") if part else "Backup Gateway"
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry_id)},
+        name="PyPowerwall",
+        manufacturer="Tesla",
+        model=model,
+        serial_number=serial or None,
+        hw_version=part or None,
+        sw_version=version,
+        configuration_url=coordinator.base_url,
+    )
+
 
 class PyPowerwallEntity(CoordinatorEntity[PyPowerwallCoordinator]):
     """Base entity for PyPowerwall integration."""
@@ -16,12 +47,7 @@ class PyPowerwallEntity(CoordinatorEntity[PyPowerwallCoordinator]):
 
     def __init__(self, coordinator: PyPowerwallCoordinator, entry_id: str) -> None:
         super().__init__(coordinator)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry_id)},
-            name="PyPowerwall",
-            manufacturer="Tesla",
-            model="Powerwall",
-        )
+        self._attr_device_info = gateway_device_info(coordinator, entry_id)
 
 
 def parse_vitals_key(key: str) -> tuple[str, str]:

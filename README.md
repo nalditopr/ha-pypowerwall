@@ -44,6 +44,11 @@ No Python pypowerwall library required in HA — pure `aiohttp`.
 - **Alert monitoring** — per-device and aggregate alert counts
 - **Backup reserve, operation mode, grid charging & grid export control** — requires `PW_CONTROL_SECRET` configured on the proxy
 - **Configurable polling interval** — 5–300 seconds (default 30 s)
+- **Energy Dashboard ready** — lifetime grid import/export (from the site meter), and solar / battery / home counters when the proxy reports them (`sensor.pypowerwall_*_energy_*`, `total_increasing`)
+- **Gateway device** — the hub device carries the gateway DIN, part number and firmware; sub-devices per Powerwall / meter / island controller
+- **Battery capacity health** — usable full-pack energy vs. nominal (13.5 kWh per Powerwall) as %
+- **Reconfigure & reauth** — change host/port/secret from the UI; the proxy rejecting the control secret starts a reauth flow
+- **Diagnostics** — download redacted diagnostics from the device page
 
 ## Installation
 

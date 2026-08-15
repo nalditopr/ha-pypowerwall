@@ -199,6 +199,42 @@
       },
       "island_grid_state": {
         "name": "Estado de Red Isla"
+      },
+      "grid_energy_imported": {
+        "name": "Energía importada de la red"
+      },
+      "grid_energy_exported": {
+        "name": "Energía exportada a la red"
+      },
+      "solar_energy_produced": {
+        "name": "Energía solar producida"
+      },
+      "battery_energy_charged": {
+        "name": "Energía cargada en batería"
+      },
+      "battery_energy_discharged": {
+        "name": "Energía descargada de batería"
+      },
+      "home_energy_consumed": {
+        "name": "Energía consumida en casa"
+      },
+      "site_full_pack_energy": {
+        "name": "Capacidad total de batería"
+      },
+      "site_energy_remaining": {
+        "name": "Energía restante en batería"
+      },
+      "battery_capacity_health": {
+        "name": "Salud de capacidad de batería"
+      },
+      "available_blocks": {
+        "name": "Powerwalls disponibles"
+      },
+      "island_state": {
+        "name": "Estado de isla"
+      },
+      "gateway_uptime": {
+        "name": "Gateway iniciado"
       }
     },
     "binary_sensor": {
