@@ -6,7 +6,7 @@
 
 [![hacs][hacsbadge]][hacs]
 
-<img src="brand/icon.png" alt="PyPowerwall icon" width="96" align="right">
+<img src="custom_components/pypowerwall/brand/icon.png" alt="PyPowerwall icon" width="96" align="right">
 
 Home Assistant custom integration for Tesla Powerwall via [pypowerwall][pypowerwall] proxy.
 
@@ -52,6 +52,7 @@ No Python pypowerwall library required in HA — pure `aiohttp`.
 - **Reconfigure & reauth** — change host/port/secret from the UI; the proxy rejecting the control secret starts a reauth flow
 - **Diagnostics** — download redacted diagnostics from the device page
 - **Services** — `pypowerwall.set_reserve`, `set_mode`, `set_grid_export`, `set_grid_charging`, `start_max_backup`, `cancel_max_backup` for automations (require the control secret)
+- **Brand icon** — shipped in `custom_components/pypowerwall/brand/` (shown by HA 2026.3+ without a brands-repo submission)
 - **Repairs** — a repair issue is raised while the proxy reports a degraded connection or fallback mode, and cleared when it recovers
 
 ## Installation
