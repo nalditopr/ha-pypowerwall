@@ -49,6 +49,8 @@ No Python pypowerwall library required in HA — pure `aiohttp`.
 - **Battery capacity health** — usable full-pack energy vs. nominal (13.5 kWh per Powerwall) as %
 - **Reconfigure & reauth** — change host/port/secret from the UI; the proxy rejecting the control secret starts a reauth flow
 - **Diagnostics** — download redacted diagnostics from the device page
+- **Services** — `pypowerwall.set_reserve`, `set_mode`, `set_grid_export`, `set_grid_charging`, `start_max_backup`, `cancel_max_backup` for automations (require the control secret)
+- **Repairs** — a repair issue is raised while the proxy reports a degraded connection or fallback mode, and cleared when it recovers
 
 ## Installation
 

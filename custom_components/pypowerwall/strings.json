@@ -334,5 +334,124 @@
         }
       }
     }
+  },
+  "services": {
+    "set_reserve": {
+      "name": "Set backup reserve",
+      "description": "Set the backup reserve percentage.",
+      "fields": {
+        "reserve": {
+          "name": "Reserve",
+          "description": "Backup reserve in percent (0-100)."
+        },
+        "config_entry_id": {
+          "name": "PyPowerwall entry",
+          "description": "Which pypowerwall proxy to target (only needed with more than one)."
+        }
+      }
+    },
+    "set_mode": {
+      "name": "Set operation mode",
+      "description": "Set the Powerwall operation mode.",
+      "fields": {
+        "mode": {
+          "name": "Mode",
+          "description": "self_consumption, backup or autonomous (time-based control)."
+        },
+        "config_entry_id": {
+          "name": "PyPowerwall entry",
+          "description": "Which pypowerwall proxy to target (only needed with more than one)."
+        }
+      }
+    },
+    "set_grid_export": {
+      "name": "Set grid export policy",
+      "description": "Control what may be exported to the grid.",
+      "fields": {
+        "policy": {
+          "name": "Policy",
+          "description": "battery_ok (everything), pv_only (solar only) or never."
+        },
+        "config_entry_id": {
+          "name": "PyPowerwall entry",
+          "description": "Which pypowerwall proxy to target (only needed with more than one)."
+        }
+      }
+    },
+    "set_grid_charging": {
+      "name": "Set grid charging",
+      "description": "Allow or forbid charging the battery from the grid.",
+      "fields": {
+        "enabled": {
+          "name": "Enabled",
+          "description": "True to allow charging from the grid."
+        },
+        "config_entry_id": {
+          "name": "PyPowerwall entry",
+          "description": "Which pypowerwall proxy to target (only needed with more than one)."
+        }
+      }
+    },
+    "start_max_backup": {
+      "name": "Start max backup",
+      "description": "Charge to 100% and hold it (manual backup event) for a duration.",
+      "fields": {
+        "minutes": {
+          "name": "Duration",
+          "description": "Minutes to hold max backup. Defaults to the Max Backup Duration entity."
+        },
+        "config_entry_id": {
+          "name": "PyPowerwall entry",
+          "description": "Which pypowerwall proxy to target (only needed with more than one)."
+        }
+      }
+    },
+    "cancel_max_backup": {
+      "name": "Cancel max backup",
+      "description": "Cancel the current manual backup event.",
+      "fields": {
+        "config_entry_id": {
+          "name": "PyPowerwall entry",
+          "description": "Which pypowerwall proxy to target (only needed with more than one)."
+        }
+      }
+    }
+  },
+  "selector": {
+    "operation_mode": {
+      "options": {
+        "self_consumption": "Self-Powered",
+        "backup": "Backup-Only",
+        "autonomous": "Time-Based Control"
+      }
+    },
+    "grid_export": {
+      "options": {
+        "battery_ok": "Battery OK",
+        "pv_only": "Solar Only",
+        "never": "Never"
+      }
+    }
+  },
+  "issues": {
+    "proxy_degraded": {
+      "title": "pypowerwall proxy is degraded",
+      "description": "The pypowerwall proxy at {host} reports a degraded connection to the Powerwall gateway (consecutive failures). Data may be stale. Check the proxy logs and its connection to the gateway."
+    },
+    "proxy_fallback": {
+      "title": "pypowerwall proxy is in fallback mode",
+      "description": "The pypowerwall proxy at {host} lost its primary transport to the gateway and is serving fallback/cached data. Check the proxy logs; it will recover automatically when the gateway is reachable again."
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "No pypowerwall config entry with id {entry_id}."
+    },
+    "entry_ambiguous": {
+      "message": "More than one pypowerwall proxy is configured; pass config_entry_id."
+    },
+    "no_control_secret": {
+      "message": "Controls are disabled: configure the control secret (PW_CONTROL_SECRET) for this pypowerwall entry."
+    }
   }
 }

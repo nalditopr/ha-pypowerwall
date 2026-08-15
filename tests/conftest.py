@@ -64,6 +64,7 @@ class FakeProxy:
         self.control_secret: str | None = SECRET  # None -> control disabled (404)
         self.posts: list[tuple[str, dict[str, str]]] = []
         self.get_log: list[str] = []
+        self.last_query: dict[str, dict[str, str]] = {}  # path -> query params of last GET
         self.hang: set[str] = set()  # paths that never answer
 
     def app(self) -> web.Application:
@@ -75,6 +76,7 @@ class FakeProxy:
     async def _get(self, request: web.Request) -> web.StreamResponse:
         path = "/" + request.match_info["tail"]
         self.get_log.append(path)
+        self.last_query[path] = dict(request.query)
         if path in self.hang:
             import asyncio
 

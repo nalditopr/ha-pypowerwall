@@ -85,8 +85,9 @@ class PyPowerwallMaxBackupDuration(PyPowerwallEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        return self.coordinator.max_backup_duration / 60
+        return self.coordinator.max_backup_minutes
 
     async def async_set_native_value(self, value: float) -> None:
-        self.coordinator.max_backup_duration = int(value) * 60
+        # Persisted in the config entry options so it survives reloads/restarts.
+        self.coordinator.set_max_backup_minutes(int(value))
         self.async_write_ha_state()

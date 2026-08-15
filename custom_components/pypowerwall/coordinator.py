@@ -3,15 +3,18 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 import logging
+import time
 from typing import Any
 
 import aiohttp
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import CONF_MAX_BACKUP_MINUTES, DEFAULT_MAX_BACKUP_MINUTES, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,19 +60,22 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         port: int,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
         control_secret: str = "",
+        max_backup_minutes: int = DEFAULT_MAX_BACKUP_MINUTES,
+        config_entry: ConfigEntry | None = None,
     ) -> None:
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=scan_interval),
+            config_entry=config_entry,
         )
         self.host = host
         self.port = port
         self._base_url = f"http://{host}:{port}"
         self._control_secret = control_secret
         self._session = async_get_clientsession(hass)
-        self.max_backup_duration: int = 3600
+        self._max_backup_minutes = int(max_backup_minutes)
         _LOGGER.debug(
             "Coordinator initialised: base_url=%s interval=%ss control=%s",
             self._base_url,
@@ -87,9 +93,66 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return True if a control secret is configured."""
         return bool(self._control_secret)
 
+    # ------------------------------------------------------- max backup duration
+    @property
+    def max_backup_minutes(self) -> int:
+        """Duration used when the max-backup switch is turned on."""
+        return self._max_backup_minutes
+
+    def set_max_backup_minutes(self, minutes: int, *, persist: bool = True) -> None:
+        """Set (and by default persist in the config entry options) the max-backup duration."""
+        self._max_backup_minutes = int(minutes)
+        entry = self.config_entry
+        if persist and entry is not None and entry.options.get(CONF_MAX_BACKUP_MINUTES) != int(minutes):
+            self.hass.config_entries.async_update_entry(
+                entry, options={**entry.options, CONF_MAX_BACKUP_MINUTES: int(minutes)}
+            )
+
+    def matches(self, scan_interval: int, control_secret: str) -> bool:
+        """True if this coordinator was built with these connection settings."""
+        running = int(self.update_interval.total_seconds()) if self.update_interval else None
+        return running == int(scan_interval) and self._control_secret == control_secret
+
+    @property
+    def max_backup_duration(self) -> int:
+        """Duration in seconds (what the proxy expects)."""
+        return self._max_backup_minutes * 60
+
+    # ------------------------------------------------------- max backup state
+    @property
+    def max_backup_active(self) -> bool | None:
+        """True while a manual (max) backup event is active, None if unknown.
+
+        The gateway leaves expired events lingering, so 'manual_backup present'
+        is not enough: use its 'active' flag (or end_time when missing).
+        """
+        data = self.data.get("control_max_backup") if self.data else None
+        if not isinstance(data, dict) or "manual_backup" not in data:
+            return None
+        mb = data.get("manual_backup")
+        if not mb:
+            return False
+        if "active" in mb:
+            return bool(mb["active"])
+        end = mb.get("end_time")
+        if end is not None:
+            return time.time() < float(end)
+        return True
+
+    def _path_for(self, path: str) -> str:
+        """Add the control token to endpoints where the proxy uses it for GET.
+
+        /control/max_backup: with a valid token the proxy auto-cancels expired
+        manual backup events that the gateway leaves lingering; a plain GET is
+        read-only and keeps reporting the stale event.
+        """
+        if path == "/control/max_backup" and self._control_secret:
+            return f"{path}?token={self._control_secret}"
+        return path
+
     async def _async_update_data(self) -> dict[str, Any]:
         results = await asyncio.gather(
-            *(self._fetch(path, required) for _key, path, required in ENDPOINTS)
+            *(self._fetch(self._path_for(path), required) for _key, path, required in ENDPOINTS)
         )
         data: dict[str, Any] = {}
         for (key, _path, _required), value in zip(ENDPOINTS, results, strict=True):
@@ -105,7 +168,33 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._base_url,
             sum(1 for v in results if v is None),
         )
+        self._update_repairs(data)
         return data
+
+    # ------------------------------------------------------------------ repairs
+    def _update_repairs(self, data: dict[str, Any]) -> None:
+        """Raise / clear repair issues from /health."""
+        health = data.get("health") or {}
+        degraded = bool((health.get("connection_health") or {}).get("is_degraded"))
+        fallback = bool((health.get("fallback_mode") or {}).get("is_fallback_mode"))
+        self._set_issue("proxy_degraded", degraded, {"host": self.host})
+        self._set_issue("proxy_fallback", fallback, {"host": self.host})
+
+    def _set_issue(self, key: str, active: bool, placeholders: dict[str, str]) -> None:
+        issue_id = f"{key}_{self.host}_{self.port}"
+        if active:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key=key,
+                translation_placeholders=placeholders,
+                learn_more_url="https://github.com/jasonacox/pypowerwall/tree/main/proxy#health-check",
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     async def _fetch(self, path: str, required: bool) -> Any:
         """GET one proxy endpoint and return its parsed JSON.
@@ -116,6 +205,7 @@ class PyPowerwallCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         (bad or missing control secret) -> reauth.
         """
         url = f"{self._base_url}{path}"
+        path = path.split("?", 1)[0]  # never log / raise the query string (may carry the token)
         try:
             async with self._session.get(url, timeout=REQUEST_TIMEOUT) as resp:
                 if resp.status in (401, 403):
