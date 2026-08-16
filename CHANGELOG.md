@@ -3,6 +3,16 @@
 All notable changes to this integration are documented here.
 Versions follow the `version` field in `custom_components/pypowerwall/manifest.json`.
 
+## 0.4.2 — 2026-08-16
+
+### Fixed
+- `sensor.*_battery_reserve` now reads the same source as the backup-reserve number
+  (`/api/operation.backup_reserve_percent`, falling back to `/json.reserve`); the two could differ
+  by a few percent because `/json` reports pypowerwall's scaled value.
+- The island controller (TESYNC) device is now identified per config entry instead of a shared
+  `tesync` id, so multiple gateways/proxies no longer collapse into one "Sync Controller" device.
+  Existing installs are migrated in place (same device, entities and history kept). (#8)
+
 ## 0.4.1 — 2026-08-15
 
 ### Fixed

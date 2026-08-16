@@ -66,7 +66,7 @@ async def test_devices_created_for_each_component(hass, proxy, setup_entry):
 
     # hub + 4 pods + meter + tesync
     assert setup_entry.entry_id in idents
-    for serial in (GATEWAY, *FOLLOWERS, EXPANSION, METER, "tesync"):
+    for serial in (GATEWAY, *FOLLOWERS, EXPANSION, METER, f"{setup_entry.entry_id}_tesync"):
         assert serial in idents, f"missing device for {serial}"
     assert "(Primary)" in idents[GATEWAY].name
     assert "(Expansion)" in idents[EXPANSION].name

@@ -13,7 +13,13 @@ from homeassistant.helpers.typing import StateType
 from .const import DOMAIN
 from .coordinator import PyPowerwallCoordinator
 from .data import PyPowerwallConfigEntry
-from .entity import PyPowerwallEntity, build_block_by_serial, build_device_labels, parse_vitals_key
+from .entity import (
+    PyPowerwallEntity,
+    build_block_by_serial,
+    build_device_labels,
+    device_identifier,
+    parse_vitals_key,
+)
 from .sensor_descriptions import (
     ENERGY_SENSOR_KEYS,
     GRID_METER_SENSORS,
@@ -96,7 +102,7 @@ class PyPowerwallVitalsSensor(PyPowerwallEntity, SensorEntity):
         self.entity_description = description
         self._attr_unique_id = f"{entry_id}_{serial}_{description.key}"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, serial)},
+            identifiers={device_identifier(entry_id, serial)},
             name=device_name or f"Powerwall {serial[-4:]} ({device_label})",
             manufacturer="Tesla",
             model=part_number or None,

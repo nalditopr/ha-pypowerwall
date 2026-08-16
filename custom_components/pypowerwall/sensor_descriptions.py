@@ -235,7 +235,14 @@ MAIN_SENSORS: tuple[PyPowerwallSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         icon="mdi:battery-lock",
-        value_fn=lambda d: d["json"].get("reserve"),
+        # Same source as the backup_reserve number entity: /api/operation is the
+        # raw setting; /json.reserve is pypowerwall's *scaled* value (it accounts
+        # for the hidden ~5 % floor) and can differ by a few percent.
+        value_fn=lambda d: (
+            (d.get("operation") or {}).get("backup_reserve_percent")
+            if (d.get("operation") or {}).get("backup_reserve_percent") is not None
+            else d["json"].get("reserve")
+        ),
     ),
     PyPowerwallSensorDescription(
         key="time_remaining",
