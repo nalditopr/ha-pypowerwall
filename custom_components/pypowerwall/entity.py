@@ -160,3 +160,18 @@ def parse_pod_data(pod_data: dict[str, Any] | None) -> dict[str, dict[str, Any]]
             result[serial] = pw_data
 
     return result
+
+
+TESYNC_PLACEHOLDER = "tesync"
+
+
+def device_identifier(entry_id: str, serial: str) -> tuple[str, str]:
+    """Device registry identifier for a vitals device.
+
+    Real serials are globally unique. The TESYNC island controller has no
+    serial in its vitals key (``TESYNC----``), so it is scoped to the config
+    entry; otherwise two gateways/proxies would share one 'Sync Controller'.
+    """
+    if serial == TESYNC_PLACEHOLDER:
+        return (DOMAIN, f"{entry_id}_{TESYNC_PLACEHOLDER}")
+    return (DOMAIN, serial)

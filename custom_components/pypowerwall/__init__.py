@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import device_registry as dr, issue_registry as ir
 
 from .const import (
     CONF_CONTROL_SECRET,
@@ -14,6 +14,7 @@ from .const import (
 )
 from .coordinator import PyPowerwallCoordinator
 from .data import PyPowerwallConfigEntry, PyPowerwallData
+from .entity import TESYNC_PLACEHOLDER, device_identifier
 from .services import async_setup_services
 
 PLATFORMS: list[Platform] = [
@@ -48,6 +49,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: PyPowerwallConfigEntry) 
     )
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = PyPowerwallData(coordinator=coordinator)
+    _migrate_tesync_device(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     async_setup_services(hass)
@@ -79,3 +81,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: PyPowerwallConfigEntry)
         for key in ("proxy_degraded", "proxy_fallback"):
             ir.async_delete_issue(hass, DOMAIN, f"{key}_{host}_{port}")
     return ok
+
+
+def _migrate_tesync_device(hass: HomeAssistant, entry: PyPowerwallConfigEntry) -> None:
+    """Re-key the legacy shared 'tesync' device to a per-entry identifier (0.4.2).
+
+    Before 0.4.2 the island controller device was identified as (DOMAIN, "tesync")
+    for every entry. Update the existing device in place so entities and history
+    stay attached instead of a new 'Sync Controller' device appearing.
+    """
+    dev_reg = dr.async_get(hass)
+    legacy = dev_reg.async_get_device(identifiers={(DOMAIN, TESYNC_PLACEHOLDER)})
+    if legacy is None or entry.entry_id not in legacy.config_entries:
+        return
+    new_ident = device_identifier(entry.entry_id, TESYNC_PLACEHOLDER)
+    if dev_reg.async_get_device(identifiers={new_ident}) is not None:
+        return  # already migrated (or created fresh); nothing to do
+    dev_reg.async_update_device(legacy.id, new_identifiers={new_ident})

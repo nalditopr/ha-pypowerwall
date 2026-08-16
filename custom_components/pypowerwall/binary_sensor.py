@@ -18,6 +18,7 @@ from .entity import (
     PyPowerwallEntity,
     build_block_by_serial,
     build_device_labels,
+    device_identifier,
     parse_pod_data,
     parse_vitals_key,
 )
@@ -293,7 +294,7 @@ class PyPowerwallPodAlerts(PyPowerwallEntity, BinarySensorEntity):
         self._vitals_key = vitals_key
         self._attr_unique_id = f"{entry_id}_{serial}_pod_alerts"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, serial)},
+            identifiers={device_identifier(entry_id, serial)},
             name=f"Powerwall {serial[-4:]} ({device_label})",
             manufacturer="Tesla",
             model=part_number,
@@ -350,7 +351,7 @@ class PyPowerwallPodHealthFlag(PyPowerwallEntity, BinarySensorEntity):
             self._attr_device_class = device_class
         self._attr_entity_registry_enabled_default = enabled_default
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, serial)},
+            identifiers={device_identifier(entry_id, serial)},
             name=f"Powerwall {serial[-4:]} ({device_label})",
             manufacturer="Tesla",
             model=part_number,
@@ -392,7 +393,7 @@ class PyPowerwallIslandGridConnected(PyPowerwallEntity, BinarySensorEntity):
         self._vitals_key = vitals_key
         self._attr_unique_id = f"{entry_id}_{serial}_island_grid_connected"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, serial)},
+            identifiers={device_identifier(entry_id, serial)},
             name="Sync Controller",
             manufacturer="Tesla",
             model=part_number or None,
